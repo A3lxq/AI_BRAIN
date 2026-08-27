@@ -1,0 +1,181 @@
+# AI_BRAIN Deployment Artifacts
+
+Status: **Phase 1 configuration artifacts, not yet a fully working deployment.**
+Both files in this directory contain placeholders for components that do not
+exist yet (see "Open items" below). Read this whole file before using either
+artifact.
+
+Full design rationale, threat model, and test strategy for everything here:
+[`docs/design/os-level-process-sandboxing.md`](../docs/design/os-level-process-sandboxing.md).
+This README is operational instructions only — it does not repeat that
+document's reasoning.
+
+## What these two artifacts are
+
+AI_BRAIN has two processes with structurally different lifecycles (design
+doc §2), so each gets a different sandboxing mechanism:
+
+| Process | Launched by | Sandboxed with | File |
+|---|---|---|---|
+| **MCP server** (stdio) | The MCP client itself (Claude Code / Claude Desktop), as a child process | `bwrap` (bubblewrap) wrapper script | `bubblewrap/ai-brain-mcp-launch.sh` |
+| **Huey worker** | `systemd --user`, independent background daemon | `systemd --user` unit hardening directives | `systemd/ai-brain-huey-worker.service` |
+
+The MCP server can't be a systemd unit because the MCP client needs to own
+its stdin/stdout directly for protocol framing (design doc §2). The Huey
+worker is a genuine long-running daemon, which is exactly what `systemd
+--user` is for. Both processes reach the same internal business-logic layer
+(`docs/ARCHITECTURE.md` §2), so their filesystem access needs are ~90%
+identical — see the design doc §3.4 for why the directive blocks look so
+similar across the two files.
+
+## Installing the Huey worker systemd unit
+
+1. Copy the unit file into your user systemd directory:
+
+   ```bash
+   mkdir -p ~/.config/systemd/user
+   cp deployment/systemd/ai-brain-huey-worker.service ~/.config/systemd/user/
+   ```
+
+2. **Before enabling it**, edit the copied file's `ExecStart=` line — it
+   currently points at a placeholder path (see "Open items" below) that does
+   not exist. Do not enable this unit until that's fixed.
+
+3. Reload and enable:
+
+   ```bash
+   systemctl --user daemon-reload
+   systemctl --user enable --now ai-brain-huey-worker.service
+   ```
+
+4. Check status and logs:
+
+   ```bash
+   systemctl --user status ai-brain-huey-worker.service
+   journalctl --user -u ai-brain-huey-worker.service -f
+   ```
+
+5. Optional — keep the worker running after logout (design doc §2's "System
+   unit vs. user unit" section):
+
+   ```bash
+   loginctl enable-linger "$USER"
+   ```
+
+6. Optional regression check, per the design doc's §7.1 test #3 — run before
+   any deploy and track the score over time:
+
+   ```bash
+   systemd-analyze security ai-brain-huey-worker.service
+   ```
+
+## Wiring the bubblewrap script into an MCP client
+
+`bubblewrap/ai-brain-mcp-launch.sh` is meant to be the `command` an MCP
+client invokes to start AI_BRAIN's MCP server, instead of invoking Python
+directly. The exact config file format varies by client (Claude Code's and
+Claude Desktop's MCP server configuration formats differ from each other and
+change over time), so this is described conceptually rather than as a
+copy-paste snippet:
+
+- Point the client's MCP server entry's `command` at the **absolute path**
+  to `ai-brain-mcp-launch.sh` (not at the Python interpreter or module
+  directly) — this is what makes the server process actually start inside
+  the bubblewrap sandbox rather than unsandboxed.
+- Pass no `args` beyond what the script itself already hardcodes; the script
+  takes no CLI arguments (it reads configuration from environment variables
+  — see below).
+- Set `AI_BRAIN_VAULT_DIR` in the environment the MCP client uses to launch
+  the server (client configs typically support an `env` map for exactly
+  this). The script fails fast (`set -euo pipefail` + `${AI_BRAIN_VAULT_DIR:?...}`)
+  if this is missing, rather than silently running unsandboxed or against
+  the wrong path.
+- Do not rely on the client inheriting your interactive shell's environment
+  — the script itself calls `--clearenv` inside the sandbox, by design
+  (design doc §3.4: prevents leaking inherited API keys / SSH agent socket
+  paths into the sandboxed process), so anything the sandboxed process needs
+  must be passed explicitly via `--setenv` inside the script, not assumed to
+  arrive from outside.
+- This project's own MCP server (`ai_brain.mcp_server`) does not exist yet
+  (see "Open items"), so this wiring cannot actually be completed today —
+  document it now, use it once Phase 6 delivers the module.
+
+## Required environment variables
+
+| Variable | Required by | Purpose |
+|---|---|---|
+| `AI_BRAIN_VAULT_DIR` | `ai-brain-mcp-launch.sh` | Absolute path to the Obsidian vault; bind-mounted read-write into the sandbox and passed through as the same env var inside it. Script aborts if unset. |
+| `HOME` | both artifacts | Used to derive `STATE_DIR` (`$HOME/.local/state/ai-brain`), `MODEL_CACHE` (`$HOME/.cache/huggingface`), and the `.ssh`/`.aws`/`.gnupg` lockout paths in the bubblewrap script; `%h` in the systemd unit resolves the same way for that process. Always set by the OS/login session — not something you need to export yourself. |
+
+No other environment variables are read by either script. Anything else the
+MCP server process needs at runtime must be added explicitly as a
+`--setenv` line in the bubblewrap script (it will not be inherited — see
+above) once that process actually exists.
+
+## Open items — placeholders that must be updated before real use
+
+**Neither artifact is deployment-ready yet.** Both contain deliberate
+placeholders, clearly marked with comments in the files themselves:
+
+1. **Venv/install path.** `ai-brain-huey-worker.service`'s `ExecStart=` uses
+   `%h/ai-brain/.venv/bin/python`, and `ai-brain-mcp-launch.sh`'s `VENV`
+   variable uses `${HOME}/ai-brain/.venv` — both are placeholders. This
+   project's actual virtualenv/install location has not been decided as of
+   this writing. Update both once it is.
+2. **`ai_brain.worker` (Huey worker entry point)** — not built yet; a later
+   Phase 2/3 component.
+3. **`ai_brain.mcp_server` (MCP server entry point)** — not built yet; a
+   later Phase 6 component.
+4. **Vault path placeholder.** The systemd unit's `ReadWritePaths=` uses
+   `%h/ObsidianVault` as a stand-in; confirm this against wherever the vault
+   actually ends up living (per CLAUDE.md rule 13, the vault stays separate
+   from AI_BRAIN's own repo/install location) before enabling the unit.
+
+## Known open questions (carried forward from the design document)
+
+These are unresolved as of the design document and are **not** decided by
+these deployment artifacts — copied here so they aren't lost between
+sessions (per CLAUDE.md's session-continuity rules):
+
+- Exact vault path templating mechanism for `ReadWritePaths=` — an
+  install-time unit-generation step is implied but not yet designed.
+- Whether `~/.gitconfig` access is actually needed by the Git Automation
+  Module once built — an empirical Phase 1 check, not a design-time
+  decision. If it is needed, `~/.gitconfig` is **not** covered by default
+  under this unit's `ProtectHome=yes` and must be added as a narrowly-scoped
+  `ReadOnlyPaths=` exception, or the module should be changed to run with
+  `GIT_CONFIG_GLOBAL=/dev/null` plus explicit `-c` flags instead.
+- Whether `MemoryDenyWriteExecute=yes` (currently commented out in the
+  systemd unit) survives contact with the actual embedding pipeline
+  (sentence-transformers / PyTorch) — empirical, gated behind the design
+  doc's §7.1 test #2. Do not enable it without running that test first.
+- Whether the systemd unit duplication implied by having near-identical
+  directive blocks across the MCP-server and Huey-worker configurations
+  should be refactored into a systemd template unit (`ai-brain@.service`)
+  during Phase 1 implementation — a code-organization choice, not a
+  security-relevant one.
+
+## Verification notes from authoring these files (2026-08-27)
+
+- Environment: systemd 259 (259.5-0ubuntu3.4, Ubuntu-based), bubblewrap
+  0.11.1, Docker 29.1.3.
+- Every systemd directive in `ai-brain-huey-worker.service` was checked
+  against this environment's `man systemd.exec` and confirmed to exist
+  under the same name with the same meaning as in systemd 257 (the version
+  the design document researched against). No renames or removals found.
+- Every `bwrap` flag in `ai-brain-mcp-launch.sh` was checked against `bwrap
+  --help`/`man bwrap` in this environment and confirmed to exist in
+  0.11.1, and the full flag combination was test-executed end to end
+  (`bwrap ... -- /usr/bin/env`, against disposable test directories) to
+  confirm it actually runs rather than only parsing. See the comment block
+  at the top of the script for one minor documentation discrepancy noticed
+  in `bwrap --help`'s text for `--share-net` (no functional impact — the
+  flag was verified to work exactly as the design intended).
+- A cross-manager ordering limitation was found and documented as a comment
+  in the systemd unit: `After=network-online.target docker.service` in a
+  `systemd --user` unit does not order against those units the way it would
+  in a system-level unit, because the user and system managers are separate
+  systemd instances. This is not a directive error — it just doesn't
+  provide the ordering guarantee it visually suggests. `Restart=on-failure`
+  + `RestartSec=5` is the actual mechanism giving resilience against
+  Docker/network not being ready yet.

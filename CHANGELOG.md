@@ -1,0 +1,58 @@
+# Changelog
+
+## Unreleased
+
+### Added
+- Ground-up Claude Code development pack.
+- Project operating instructions.
+- Development constitution.
+- Master specification.
+- Roadmap.
+- Continuity files.
+- Research and ADR structure.
+- Security and testing requirements.
+- Runtime/language research for Python, TypeScript/Node.js, Go, and Rust (`docs/research/2026-08-22_runtime_*.md`).
+- Runtime comparison matrix and recommendation (`docs/research/2026-08-22_runtime_comparison.md`).
+- ADR-0001: runtime language selection — **Python**, status Accepted 2026-08-22 (`docs/adr/0001-runtime-language-selection.md`).
+- Job/queue architecture research (`docs/research/2026-08-22_job_queue_architecture.md`).
+- ADR-0002: job/queue architecture — **Huey with SQLite backend**, status Accepted 2026-08-22 (`docs/adr/0002-job-queue-architecture.md`).
+- RAG orchestration research (`docs/research/2026-08-22_rag_orchestration.md`).
+- ADR-0003: RAG orchestration approach — **hand-rolled composable primitives** (no LangChain/LlamaIndex adoption), status Accepted 2026-08-22 (`docs/adr/0003-rag-orchestration-approach.md`).
+- SQLite access layer research (`docs/research/2026-08-22_sqlite_access_layer.md`).
+- ADR-0004: SQLite access layer — **hand-rolled thin repository layer over `aiosqlite`**, Huey uses a separate database file, status Accepted 2026-08-22 (`docs/adr/0004-sqlite-access-layer.md`).
+- Git automation library research (`docs/research/2026-08-24_git_automation_library.md`).
+- ADR-0005: Git automation library — **purpose-built subprocess wrapper around the real `git` CLI** (no GitPython), status Accepted 2026-08-24 (`docs/adr/0005-git-automation-library.md`).
+- Qdrant deployment research (`docs/research/2026-08-24_qdrant_deployment.md`); ADR-0006: **Docker server, localhost-bound**, status Accepted 2026-08-24 (`docs/adr/0006-qdrant-deployment-mode.md`).
+- MCP tool contract research (`docs/research/2026-08-24_mcp_tool_contract.md`); ADR-0007: **full tool contract with MRTR confirmation for destructive ops**, status Accepted 2026-08-24 (`docs/adr/0007-mcp-tool-contract.md`).
+- Embeddings model choice research (`docs/research/2026-08-24_embeddings_model_choice.md`); ADR-0008: **BGE-M3 + bge-reranker-v2-m3 + Qdrant miniCOIL**, status Accepted 2026-08-24 (`docs/adr/0008-embeddings-model-choice.md`).
+- Filesystem event architecture research (`docs/research/2026-08-24_filesystem_event_architecture.md`); ADR-0009: **light debouncing + idempotent Huey jobs + reconciliation backstop**, status Accepted 2026-08-24 (`docs/adr/0009-filesystem-event-architecture.md`).
+- All nine Phase 0 technology-selection ADRs now accepted.
+- `docs/LONGEVITY_NOTES.md`: long-term viability reasoning across all nine ADRs.
+- `docs/ARCHITECTURE.md`: consolidated architecture document (layers, component inventory, data flow, trust boundaries, consolidated open questions).
+- `docs/DATA_MODEL.md`: full SQLite DDL and Qdrant payload schema, validated against a real sample of the user's actual vault content.
+- `docs/EVENT_MODEL.md`: event taxonomy, envelope schema, primary pipeline walkthrough, failure/recovery handling, MCP mapping — recommends new ADR-0010.
+- `docs/SECURITY_MODEL.md`: deepened into a full STRIDE + OWASP-LLM-Top-10-2026 threat model, adversarially red-team reviewed against primary sources.
+- `docs/TESTING_STRATEGY.md` and `docs/GIT_WORKFLOW.md`: elaborated with concrete per-subsystem test cases and operational runbooks (Qdrant upgrade, gitleaks setup, auto-commit/push policy, branching policy).
+- All Phase 0 exit criteria (master spec §18) now satisfied.
+- ADR-0010: event audit/replay log (`events` table), status Accepted 2026-08-27 (`docs/adr/0010-event-audit-log.md`).
+- `docs/design/vault-safety-boundary.md`: path-traversal/symlink safety mechanism + verified `python-frontmatter` YAML-safety design (P0 #1, #3).
+- `docs/design/os-level-process-sandboxing.md`: systemd + bubblewrap process hardening design (P0 #2).
+- `docs/design/storage-runtime-hardening.md`: Huey serializer startup assertion + SQLite/Qdrant file-permission hardening design (P0 #4, #5).
+- `docs/design/pre-ingestion-secret-scanning.md`: `detect-secrets`-based pre-ingestion scanner design (P0 #6).
+- ADR-0011: secret-scan schema (`notes.secret_scan_status`, `note_secret_findings`, `secret_scan_allowlist`), status Accepted 2026-08-27 (`docs/adr/0011-secret-scan-schema.md`).
+- Phase 1 foundational scaffolding: `src/ai_brain` package, `pyproject.toml` (hatchling build backend, mypy --strict, ruff), `ai_brain.config`, `ai_brain.logging_setup` (structured JSON logging), `ai_brain.cli` (`ai-brain doctor` / `ai-brain version`), `ai_brain.diagnostics` (doctor report wiring together all P0 checks).
+- `ai_brain.safety.paths` / `ai_brain.safety.content`: implementation of the vault safety boundary design (P0 #1, #3) — `SafeVaultPath`, `resolve_vault_path()`, `resolve_vault_pathspec()`, `parse_note_safely()`.
+- `ai_brain.hardening.serializer` / `ai_brain.hardening.permissions`: implementation of the storage/runtime hardening design (P0 #4, #5) — `assert_safe_job_serializer()`, `ensure_private_file()`, `ensure_private_dir()`.
+- `ai_brain.security.secrets`: implementation of the pre-ingestion secret scanning design (P0 #6) — `scan_note_for_secrets()`, `redact_high_confidence_spans()`, using `detect-secrets`.
+- `deployment/systemd/ai-brain-huey-worker.service`, `deployment/bubblewrap/ai-brain-mcp-launch.sh`, `deployment/README.md`: implementation of the OS-level process sandboxing design (P0 #2), verified against this environment's real systemd 259 and bubblewrap 0.11.1; both configs explicitly marked not-deployment-ready pending entry-point modules and a real install path.
+- Test suite: 87 tests across `tests/safety/`, `tests/hardening/`, `tests/security/`, `tests/test_diagnostics.py`, `tests/test_cli.py` — all passing; mypy --strict clean; ruff clean.
+
+### Not yet implemented
+- SQLite migration runner + repository layer (schema designed in ADR-0004/ADR-0011, not yet applied)
+- Vault ingestion pipeline (filesystem watcher, debouncing, reconciliation)
+- `ai_brain.worker` (Huey worker entry point)
+- `ai_brain.mcp_server` (MCP server entry point)
+- Retrieval engine
+- Indexing engine
+- Event engine
+- Git automation module

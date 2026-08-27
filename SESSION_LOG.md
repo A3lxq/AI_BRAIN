@@ -1,0 +1,18 @@
+# AI_BRAIN Session Log
+
+| Session | Phase | Summary | Status |
+|---|---|---|---|
+| 001 | 0 | Architecture, principles, continuity strategy established | Complete |
+| 002 | 0 | Ground-up Claude Code development pack prepared | Complete |
+| 003 | 0 | Runtime/language research (Python, TypeScript/Node.js, Go, Rust); comparison matrix; ADR-0001 drafted and accepted (Python) | Complete |
+| 004 | 0 | Job/queue architecture research (Celery, Dramatiq, Taskiq, RQ, arq, Huey, hand-rolled); ADR-0002 drafted and accepted (Huey, SQLite backend) | Complete |
+| 005 | 0 | RAG orchestration research (LangChain+LangGraph, LlamaIndex, hand-rolled, middle-ground); ADR-0003 drafted and accepted (hand-rolled composable primitives) | Complete |
+| 006 | 0 | SQLite access layer research (raw sqlite3/aiosqlite, SQLAlchemy 2.x, SQLModel, Peewee, hand-rolled); ADR-0004 drafted and accepted (hand-rolled repository layer; Huey separate DB file) | Complete |
+| 007 | 0 | Git automation library research (raw subprocess, GitPython, pygit2, Dulwich, hybrid); ADR-0005 drafted and accepted (purpose-built subprocess wrapper) | Complete |
+| 008 | 0 | Parallel research on 4 remaining Phase 0 topics (Qdrant deployment, MCP tool contract, embeddings/sparse/reranker choice, filesystem event architecture); ADR-0006 through ADR-0009 drafted and accepted | Complete |
+| 009 | 0 | Long-term viability synthesis (`LONGEVITY_NOTES.md`); Phase 0 exit-criteria synthesis via parallel agents (architecture, data model, event model, security threat model + adversarial red-team review, testing strategy + Git runbook); real vault sample inspected via user-provided private repo, informing data/event models | Complete — ADR-0010 and security P0 remediation still open |
+| 010 | 0 | ADR-0010 (events audit/replay table) drafted and accepted; Phase 0 readiness assessed against master spec §18 exit criteria | Complete — security P0 remediation is the sole remaining gate before Phase 1 |
+| 011 | 0 | Designed all six P0 security checklist items as four parallel Article-2 design documents (vault safety boundary, OS-level process sandboxing, storage/runtime hardening, pre-ingestion secret scanning) | Complete — designs only, no implementation yet; a follow-on schema ADR for secret-scanning is still needed |
+| 012 | 0 | ADR-0011 (secret-scan schema: `notes.secret_scan_status`, `note_secret_findings`, `secret_scan_allowlist`) drafted and accepted | Complete — all Phase 0 design/decision work now done; only implementation remains before Phase 1 |
+| 008 | 0 | Parallel research on 4 remaining Phase 0 topics (Qdrant deployment, MCP tool contract, embeddings/sparse/reranker choice, filesystem event architecture); ADR-0006 through ADR-0009 drafted and accepted | Complete |
+| 013 | 1 | Phase 1 foundational scaffolding built via multiple parallel agents: `src/ai_brain` package, config/logging/CLI/doctor diagnostics, and all four P0 security design docs implemented as tested code (vault safety boundary, OS-level process sandboxing, storage/runtime hardening, pre-ingestion secret scanning); 87/87 tests passing, mypy --strict clean, ruff clean, live CLI run verified | Complete — no git commit made yet; migration runner, ingestion pipeline, worker, and MCP server entry points remain for future sessions |

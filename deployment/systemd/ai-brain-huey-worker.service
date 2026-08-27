@@ -1,0 +1,103 @@
+# ai-brain-huey-worker.service
+#
+# systemd --user unit for AI_BRAIN's Huey background worker.
+# Implements the hardening design in docs/design/os-level-process-sandboxing.md
+# (§3.3 directive table, §3.4 unit file). Do not remove hardening directives
+# for convenience — see that document for the rationale behind each one and
+# the residual-risk discussion in its §6.
+#
+# Verified 2026-08-27 against this environment's `systemctl --version`
+# (systemd 259 (259.5-0ubuntu3.4), Ubuntu-based) and `man systemd.exec` —
+# every directive below exists under that name in systemd 259. This is newer
+# than the systemd 257 (Debian Trixie) the design document researched
+# against, and no directive used here was renamed, removed, or gained a
+# different meaning between 257 and 259.
+#
+# Install: copy to ~/.config/systemd/user/ai-brain-huey-worker.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now ai-brain-huey-worker.service
+# See ../README.md for full operational instructions.
+
+[Unit]
+Description=AI_BRAIN Huey background worker
+
+# NOTE (verification finding, not in the original design snippet):
+# network-online.target and docker.service are units of the SYSTEM manager
+# (PID 1's systemd instance). This is a `systemd --user` unit, run by a
+# separate per-user manager instance that does not share a unit namespace
+# with the system manager. After=/Wants= referencing a system-manager-only
+# unit name does not give a real cross-manager ordering guarantee here —
+# systemd will not fail the unit over it, but it also will not actually wait
+# for Docker to finish starting. These lines are kept as documentation of
+# intent (this worker's job queue depends on Qdrant running in Docker per
+# ADR-0006), but the real resilience mechanism against "Docker/network not
+# ready yet" is Restart=on-failure + RestartSec=5 below, not this ordering.
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# --- PLACEHOLDER: entry point does not exist yet ---
+# `ai_brain.worker` is a Phase 2/3 component per the project roadmap and has
+# not been built. `%h/ai-brain/.venv` is likewise a placeholder install
+# location, not an actual venv created by this project yet. Do NOT enable
+# this unit until both of the following are true:
+#   1. The project's actual virtualenv/install location for Phase 1 has been
+#      decided and created (see docs/design/os-level-process-sandboxing.md
+#      "Open Questions Carried Forward" — vault/venv path templating is not
+#      yet designed as an install-time step).
+#   2. `ai_brain.worker` exists as a runnable module.
+# Update this ExecStart= line to the real, verified path before first use.
+ExecStart=%h/ai-brain/.venv/bin/python -m ai_brain.worker
+Restart=on-failure
+RestartSec=5
+
+# --- Filesystem sandboxing ---
+ProtectSystem=strict
+ProtectHome=yes
+# ReadWritePaths= punches explicit exceptions back through ProtectSystem=strict
+# and ProtectHome=yes. %h/ObsidianVault is itself a placeholder for wherever
+# the actual vault ends up living — confirm against the real
+# AI_BRAIN_VAULT_DIR / vault configuration before relying on this in
+# production (see README "Open items carried forward").
+ReadWritePaths=%h/ObsidianVault %h/.local/state/ai-brain
+ReadOnlyPaths=%h/.cache/huggingface
+PrivateTmp=yes
+PrivateDevices=yes
+StateDirectory=ai-brain
+LogsDirectory=ai-brain
+
+# --- Privilege / capability restriction ---
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RemoveIPC=yes
+UMask=0077
+
+# --- Kernel/system surface restriction ---
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+
+# --- Network restriction ---
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# --- Syscall filtering (see design doc §3.5 — verify empirically before
+# tightening further; @system-service is deliberately broad, not a
+# hand-built allowlist) ---
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# MemoryDenyWriteExecute=yes   # enable only after §7 test confirms the
+                                # embedding pipeline (sentence-transformers /
+                                # PyTorch) survives it — open item, see README.
+
+[Install]
+WantedBy=default.target

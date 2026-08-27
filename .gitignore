@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Test / lint / type-check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# uv
+uv.lock.tmp
+
+# AI_BRAIN runtime state — never commit derived state or secrets
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+/data/
+/.local-state/
+
+# OS/editor cruft
+.DS_Store
+*.swp
+
+# Original zipped development pack (already extracted into this repo)
+AI_BRAIN_CLAUDE_CODE_DEVELOPMENT_PACK.zip
