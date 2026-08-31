@@ -10,18 +10,21 @@ Ground-up development with Claude Code
 
 ## Current Phase
 
-Phase 1 — Foundation (in progress)
+Phase 2 — Vault Engine (in progress; Phase 1 Foundation is complete)
 
 ## Current Status
 
-**Phase 0 is fully closed** (all eleven ADRs accepted, all exit criteria satisfied). **Phase 1 foundational scaffolding is now implemented, tested, and verified**: a real `src/`-layout Python package (`ai_brain`) exists with `pyproject.toml` (hatchling, mypy --strict, ruff), config loading, structured JSON logging, a `doctor` diagnostics command, and a minimal CLI (`ai-brain doctor` / `ai-brain version`). **All four P0 security design docs are now implemented as working code**, not just designs:
+**Phase 0 is fully closed** (all eleven ADRs accepted, all exit criteria satisfied). **Phase 1 foundational scaffolding is complete**: `src/ai_brain` package, config/logging/CLI/doctor, and all four P0 security modules (`ai_brain.safety.*`, `ai_brain.hardening.*`, `ai_brain.security.secrets`), plus the OS-sandboxing deployment configs. This was committed and pushed to `github.com/A3lxq/AI_BRAIN` (`main`, commit `a4050d3` merged with the repo's pre-existing history as `d97840d`).
 
-- `ai_brain.safety.paths` / `ai_brain.safety.content` — vault safety boundary (`SafeVaultPath`, `resolve_vault_path()`, `parse_note_safely()`)
-- `ai_brain.hardening.serializer` / `ai_brain.hardening.permissions` — storage/runtime hardening (`assert_safe_job_serializer()`, `ensure_private_file()`/`ensure_private_dir()`)
-- `ai_brain.security.secrets` — pre-ingestion secret scanning (`scan_note_for_secrets()`, `redact_high_confidence_spans()`)
-- `deployment/systemd/ai-brain-huey-worker.service` + `deployment/bubblewrap/ai-brain-mcp-launch.sh` — OS-level process sandboxing, verified against this environment's actual systemd 259 and bubblewrap 0.11.1 (both configs are explicitly marked as placeholders for the worker/MCP-server entry points and install paths, which don't exist yet — see "Not Yet Completed")
+**Phase 2 (Vault Engine) foundational slice is now implemented, tested, and verified end-to-end**, per `docs/design/migration-runner-and-vault-ingestion.md` (accepted 2026-08-28, implemented 2026-08-31):
 
-87/87 tests passing, mypy --strict clean, ruff clean, and a live end-to-end `ai-brain doctor` run confirmed working. **No git commit has been made yet** — `git init -b main` only; all Phase 1 files are untracked pending an explicit user go-ahead to commit.
+- `ai_brain.db.migrate` — SQLite migration runner (`PRAGMA user_version` + numbered `.sql` files), with real atomic rollback-on-failure and checksum-drift detection verified empirically. **Real gotcha found and fixed during implementation**: `aiosqlite`/stdlib `sqlite3`'s `executescript()` silently auto-commits each statement regardless of an enclosing transaction — migrations are instead split into individual statements (respecting `CREATE TRIGGER ... BEGIN ... END;` bodies) and executed one at a time inside an explicit `BEGIN`/`COMMIT`/`ROLLBACK`.
+- `ai_brain.db.repository.*` — typed async repository functions (notes, tags, provenance, lifecycle, events, research_jobs, secret_findings) over the migrated schema.
+- `ai_brain.vault.provenance_inference`, `ai_brain.vault.watcher` (real filesystem debouncing over `watchdog` 6.0.0, with a genuine behavioral discrepancy found and handled: watchdog synthesizes spurious parent-directory events), `ai_brain.vault.lifecycle`, `ai_brain.vault.ingest` (the idempotent per-path ingestion job — metadata/provenance/lifecycle/secret-scan persistence, move/delete detection, deliberately stops short of chunking/embedding which is Phase 3), `ai_brain.vault.bootstrap`, `ai_brain.vault.reconcile`.
+- `ai_brain.worker` — the Huey entry point resolving the systemd unit's `ai_brain.worker` placeholder from Phase 1.
+- CLI: `ai-brain migrate`, `ai-brain ingest bootstrap`, `ai-brain ingest reconcile`; doctor gained a `schema_version` check.
+
+211/211 tests passing, mypy --strict clean, ruff clean. **Live end-to-end verification performed**: `ai-brain migrate` → `ai-brain doctor` (all-ok) → `ai-brain ingest bootstrap` against a fixture vault covering all three real content shapes (ChatGPT-style, Qwen-style, OWASP-style) → correct `notes`/`provenance`/`note_lifecycle_history`/`events` rows confirmed by direct DB inspection → `ai-brain ingest reconcile` confirmed a true no-op. **This work has not yet been committed** — awaiting explicit user go-ahead, per standing practice.
 
 ## Accepted Architecture
 
@@ -97,21 +100,28 @@ Phase 1 — Foundation (in progress)
 - Phase 1 foundational scaffolding implemented 2026-08-27: `src/ai_brain` package, `pyproject.toml` (hatchling, mypy --strict, ruff), `config.py`, `logging_setup.py`, `cli.py`, `diagnostics.py` (`ai-brain doctor`/`ai-brain version`)
 - All four P0 security design docs implemented as working, tested code 2026-08-27: `ai_brain.safety.{paths,content}`, `ai_brain.hardening.{serializer,permissions}`, `ai_brain.security.secrets`, plus `deployment/systemd/` and `deployment/bubblewrap/` configs (verified against this environment's real systemd 259 / bubblewrap 0.11.1)
 - 87/87 tests passing, mypy --strict clean, ruff clean, live `ai-brain doctor` CLI run verified end-to-end 2026-08-27
+- Phase 1 work committed and pushed to `github.com/A3lxq/AI_BRAIN` `main` 2026-08-27 (merged with the repo's pre-existing history, no history discarded)
+- `docs/design/migration-runner-and-vault-ingestion.md` drafted and accepted 2026-08-28 — migration runner, minimal repository layer, vault ingestion pipeline (watcher/ingest/bootstrap/reconcile), `ai_brain.worker`
+- Migration runner + full `DATA_MODEL.md`/`EVENT_MODEL.md`/ADR-0011 schema (3 numbered migrations) implemented and applied for the first time 2026-08-31, with atomic rollback and checksum-drift detection verified empirically (a real `executescript()` non-atomicity gotcha was found and worked around)
+- Repository layer (`ai_brain.db.repository.{notes,tags,provenance,lifecycle,events,research_jobs,secret_findings}`), provenance inference, filesystem watcher (real `watchdog` 6.0.0 behavior verified, one genuine discrepancy found: spurious `DirModifiedEvent` synthesis), vault lifecycle service, the idempotent `ingest_note` job (secret-scan persistence into ADR-0011's schema now wired to a real caller for the first time), bootstrap, reconciliation, and `ai_brain.worker` all implemented 2026-08-31
+- CLI gained `ai-brain migrate`/`ai-brain ingest bootstrap`/`ai-brain ingest reconcile`; doctor gained a `schema_version` check
+- 211/211 tests passing, mypy --strict clean, ruff clean; live end-to-end CLI verification against a 3-note fixture vault (all three real content shapes) confirmed correct database state 2026-08-31
 
 ## Not Yet Completed
 
 - Adding `secret_findings_list`/`secret_finding_resolve` to ADR-0007's tool contract table (a lightweight cross-reference now, or a full entry at implementation time — open question in ADR-0011)
-- Real vault ingestion pipeline (filesystem watcher, debouncing, reconciliation job per ADR-0009)
-- SQLite migration runner + repository layer per ADR-0004/ADR-0011 (the secret-scan schema is designed and accepted but no migration has been written or applied yet — `ai_brain.db` does not yet have any tables)
-- `ai_brain.worker` (Huey worker entry point) and `ai_brain.mcp_server` (stdio MCP server entry point) — both are referenced only as placeholders in the deployment configs; neither module exists yet
-- Wiring `scan_note_for_secrets()` into an actual ingestion job (the module is implemented and tested standalone, but nothing calls it as part of a pipeline yet)
+- `notes.index_state`/`last_index_error` columns — deliberately deferred to Phase 3's indexing design doc, which owns the job that would set them (see `docs/design/migration-runner-and-vault-ingestion.md` §1/§8)
+- Status promotion from `draft` to `active` — no mechanism decided yet for when freshly-ingested legacy content leaves `draft` (design doc §8 open item)
+- `watchdog`'s CVE/maintainer-trust supply-chain review — flagged as required before this design was implemented but not yet actually done (design doc §6/§8)
+- Chunking/embedding/Qdrant upsert (Phase 3 — `chunks` table exists in schema but nothing writes to it yet)
+- `ai_brain.mcp_server` (stdio MCP server entry point) — still only a placeholder in the bubblewrap script; Phase 6
 - Deciding the real install location/venv path referenced by the systemd unit and bwrap script (currently placeholder paths under `%h`/`$HOME`)
-- Committing this Phase 1 work to git (nothing has been committed yet — awaiting explicit user go-ahead)
+- Committing this Phase 2 work to git (nothing has been committed yet this session — awaiting explicit user go-ahead)
 
 ## Immediate Next Step
 
-Decide with the user whether to commit the current Phase 1 foundational scaffolding now. After that, the next substantive Phase 1 work is the SQLite migration runner + repository layer (ADR-0004/ADR-0011) and the real vault ingestion pipeline (ADR-0009), since the four P0 security modules now need a real caller to be wired into.
+Decide with the user whether to commit the current Phase 2 vault-ingestion work now. After that, the next substantive work is Phase 3 (Indexing): chunking (`chonkie`), embedding (`sentence-transformers`), Qdrant vector index, FTS5 keyword search wiring, and the `index_state` column this session's design doc deliberately deferred — plus giving `watchdog` the supply-chain scrutiny still outstanding.
 
 ## Important Constraint
 
-Do not start production implementation until Phase 0 exit criteria are satisfied. (Satisfied — Phase 1 implementation is now underway.)
+Do not start production implementation until Phase 0 exit criteria are satisfied. (Satisfied — Phase 1 and the Phase 2 foundational slice are both implemented and verified.)

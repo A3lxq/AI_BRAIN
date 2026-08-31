@@ -10,6 +10,7 @@ stake and how to fix it.
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 import sys
 import tempfile
@@ -21,6 +22,13 @@ from huey import SqliteHuey
 from huey.serializer import SignedSerializer
 
 from ai_brain.config import AIBrainConfig
+from ai_brain.db.connection import open_connection
+from ai_brain.db.migrate import (
+    DEFAULT_MIGRATIONS_DIR,
+    MigrationChecksumMismatchError,
+    SchemaStatus,
+    check_schema_status,
+)
 from ai_brain.hardening.permissions import (
     PermissionHardeningFailed,
     ensure_private_dir,
@@ -132,6 +140,29 @@ def _check_secret_scanner() -> DoctorCheck:
     )
 
 
+async def _read_schema_status(config: AIBrainConfig) -> SchemaStatus:
+    async with open_connection(config.db_path) as conn:
+        return await check_schema_status(conn, DEFAULT_MIGRATIONS_DIR)
+
+
+def _check_schema_version(config: AIBrainConfig) -> DoctorCheck:
+    try:
+        status = asyncio.run(_read_schema_status(config))
+    except MigrationChecksumMismatchError as exc:
+        return DoctorCheck("schema_version", "fail", str(exc))
+
+    if not status.up_to_date:
+        return DoctorCheck(
+            "schema_version",
+            "warn",
+            f"database schema is at version {status.current_version}, "
+            f"{status.highest_available_version} available — run `ai-brain migrate`",
+        )
+    return DoctorCheck(
+        "schema_version", "ok", f"database schema is up to date (version {status.current_version})"
+    )
+
+
 def _check_external_tool(name: str, binary: str, *, required: bool) -> DoctorCheck:
     found = shutil.which(binary)
     if found:
@@ -153,6 +184,7 @@ def run_doctor(config: AIBrainConfig) -> DoctorReport:
         _check_data_dir(config),
         _check_db_file_permissions("metadata_db_permissions", config.db_path),
         _check_db_file_permissions("huey_db_permissions", config.huey_db_path),
+        _check_schema_version(config),
         _check_huey_serializer(config),
         _check_secret_scanner(),
         _check_external_tool("git_available", "git", required=True),

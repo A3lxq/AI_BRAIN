@@ -46,11 +46,23 @@
 - `ai_brain.security.secrets`: implementation of the pre-ingestion secret scanning design (P0 #6) — `scan_note_for_secrets()`, `redact_high_confidence_spans()`, using `detect-secrets`.
 - `deployment/systemd/ai-brain-huey-worker.service`, `deployment/bubblewrap/ai-brain-mcp-launch.sh`, `deployment/README.md`: implementation of the OS-level process sandboxing design (P0 #2), verified against this environment's real systemd 259 and bubblewrap 0.11.1; both configs explicitly marked not-deployment-ready pending entry-point modules and a real install path.
 - Test suite: 87 tests across `tests/safety/`, `tests/hardening/`, `tests/security/`, `tests/test_diagnostics.py`, `tests/test_cli.py` — all passing; mypy --strict clean; ruff clean.
+- Phase 1 work committed and pushed to `github.com/A3lxq/AI_BRAIN` `main`, merged with the repository's pre-existing history.
+- `docs/design/migration-runner-and-vault-ingestion.md`: design for the SQLite migration runner, a minimal repository layer, and the vault ingestion pipeline (ADR-0004/ADR-0009/ADR-0010/ADR-0011), implementing already-accepted decisions rather than making new ones.
+- `ai_brain.db.migrate`: SQLite migration runner (`PRAGMA user_version` + numbered `.sql` files) with real atomic rollback-on-failure and checksum-drift detection; 3 numbered migrations apply the full `DATA_MODEL.md`/`EVENT_MODEL.md`/ADR-0011 schema for the first time.
+- `ai_brain.db.repository.{notes,tags,provenance,lifecycle,events,research_jobs,secret_findings}`: typed async repository functions over the migrated schema.
+- `ai_brain.vault.provenance_inference`: folder-name/content-shape → `origin`/`provider` inference implementing `DATA_MODEL.md` §0's rules.
+- `ai_brain.vault.watcher`: real filesystem watcher/debounce layer over `watchdog` 6.0.0 (ADR-0009).
+- `ai_brain.vault.lifecycle`: the note lifecycle service (`create_note`/`update_note_content`/`move_note`/`delete_note`/`transition_status`).
+- `ai_brain.vault.ingest`: the idempotent per-path ingestion job — metadata, provenance, lifecycle, and secret-scan-finding persistence (ADR-0011's schema now has a real caller), move/delete detection.
+- `ai_brain.vault.bootstrap` / `ai_brain.vault.reconcile`: one-time full-vault ingestion and the periodic/startup reconciliation backstop.
+- `ai_brain.worker`: the Huey entry point (`huey_consumer.py ai_brain.worker.huey`), resolving the systemd unit's placeholder from Phase 1.
+- CLI: `ai-brain migrate`, `ai-brain ingest bootstrap`, `ai-brain ingest reconcile`; `ai-brain doctor` gained a `schema_version` check.
+- Test suite: 211 tests total (124 new this session) — all passing; mypy --strict clean; ruff clean. Live end-to-end CLI verification performed against a 3-note fixture vault covering all three real content shapes.
 
 ### Not yet implemented
-- SQLite migration runner + repository layer (schema designed in ADR-0004/ADR-0011, not yet applied)
-- Vault ingestion pipeline (filesystem watcher, debouncing, reconciliation)
-- `ai_brain.worker` (Huey worker entry point)
+- `notes.index_state`/`last_index_error` columns (deliberately deferred to Phase 3's own indexing design doc)
+- Status promotion from `draft` to `active` (no mechanism decided yet)
+- `watchdog` supply-chain review (flagged as required, not yet performed)
 - `ai_brain.mcp_server` (MCP server entry point)
 - Retrieval engine
 - Indexing engine

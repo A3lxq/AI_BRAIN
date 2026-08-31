@@ -1,0 +1,179 @@
+"""Tests for `ai_brain.db.repository.provenance` against a real migrated SQLite file."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import aiosqlite
+import pytest
+
+from ai_brain.db.migrate import DEFAULT_MIGRATIONS_DIR, apply_pending_migrations
+from ai_brain.db.repository import notes, provenance
+
+
+@pytest.fixture
+async def conn(tmp_path: Path) -> aiosqlite.Connection:
+    connection = await aiosqlite.connect(tmp_path / "test.db")
+    await apply_pending_migrations(connection, DEFAULT_MIGRATIONS_DIR)
+    yield connection
+    await connection.close()
+
+
+async def _make_note(conn: aiosqlite.Connection) -> int:
+    return await notes.insert(
+        conn,
+        path="CLAUDE/a.md",
+        title="A",
+        origin="ai_generated",
+        provider="anthropic",
+        folder="CLAUDE",
+        content_hash="h",
+        created_at="2026-08-28T00:00:00+00:00",
+    )
+
+
+async def test_insert_activity_returns_new_id_and_stores_fields(
+    conn: aiosqlite.Connection,
+) -> None:
+    note_id = await _make_note(conn)
+
+    provenance_id = await provenance.insert_activity(
+        conn,
+        note_id=note_id,
+        activity_type="ingested",
+        provider="anthropic",
+        model=None,
+        human_edited=False,
+        occurred_at="2026-08-28T00:00:00+00:00",
+        recorded_at="2026-08-28T00:00:01+00:00",
+    )
+
+    cursor = await conn.execute(
+        "SELECT note_id, activity_type, provider, human_edited, transformation_notes, "
+        "research_job_id FROM provenance WHERE id = ?",
+        (provenance_id,),
+    )
+    row = await cursor.fetchone()
+    assert row == (note_id, "ingested", "anthropic", 0, None, None)
+
+
+async def test_insert_activity_stores_optional_fields_when_provided(
+    conn: aiosqlite.Connection,
+) -> None:
+    note_id = await _make_note(conn)
+    huey_task_id = "huey-task-1"
+    await conn.execute(
+        "INSERT INTO research_jobs (huey_task_id, job_type, created_at) VALUES (?, ?, ?)",
+        (huey_task_id, "ingestion", "2026-08-28T00:00:00+00:00"),
+    )
+    await conn.commit()
+    cursor = await conn.execute(
+        "SELECT id FROM research_jobs WHERE huey_task_id = ?", (huey_task_id,)
+    )
+    job_row = await cursor.fetchone()
+    assert job_row is not None
+    job_id = job_row[0]
+
+    provenance_id = await provenance.insert_activity(
+        conn,
+        note_id=note_id,
+        activity_type="human_edit",
+        provider="human",
+        model=None,
+        human_edited=True,
+        occurred_at="2026-08-28T00:00:00+00:00",
+        recorded_at="2026-08-28T00:00:01+00:00",
+        transformation_notes="cleaned up formatting",
+        research_job_id=job_id,
+    )
+
+    cursor = await conn.execute(
+        "SELECT human_edited, transformation_notes, research_job_id FROM provenance WHERE id = ?",
+        (provenance_id,),
+    )
+    row = await cursor.fetchone()
+    assert row == (1, "cleaned up formatting", job_id)
+
+
+async def test_insert_source_attaches_to_provenance_row(conn: aiosqlite.Connection) -> None:
+    note_id = await _make_note(conn)
+    provenance_id = await provenance.insert_activity(
+        conn,
+        note_id=note_id,
+        activity_type="ingested",
+        provider="anthropic",
+        model=None,
+        human_edited=False,
+        occurred_at="2026-08-28T00:00:00+00:00",
+        recorded_at="2026-08-28T00:00:01+00:00",
+    )
+
+    await provenance.insert_source(
+        conn,
+        provenance_id=provenance_id,
+        url="https://chat.example.com/conversation/abc",
+        title="Example conversation",
+        accessed_at="2026-08-28T00:00:00+00:00",
+    )
+
+    cursor = await conn.execute(
+        "SELECT provenance_id, url, title, accessed_at FROM provenance_sources "
+        "WHERE provenance_id = ?",
+        (provenance_id,),
+    )
+    row = await cursor.fetchone()
+    assert row == (
+        provenance_id,
+        "https://chat.example.com/conversation/abc",
+        "Example conversation",
+        "2026-08-28T00:00:00+00:00",
+    )
+
+
+async def test_insert_source_with_only_required_fields(conn: aiosqlite.Connection) -> None:
+    note_id = await _make_note(conn)
+    provenance_id = await provenance.insert_activity(
+        conn,
+        note_id=note_id,
+        activity_type="ingested",
+        provider=None,
+        model=None,
+        human_edited=False,
+        occurred_at="2026-08-28T00:00:00+00:00",
+        recorded_at="2026-08-28T00:00:01+00:00",
+    )
+
+    await provenance.insert_source(conn, provenance_id=provenance_id, url="https://example.com")
+
+    cursor = await conn.execute(
+        "SELECT title, accessed_at FROM provenance_sources WHERE provenance_id = ?",
+        (provenance_id,),
+    )
+    row = await cursor.fetchone()
+    assert row == (None, None)
+
+
+async def test_insert_source_url_with_sql_metacharacters_stored_literally(
+    conn: aiosqlite.Connection,
+) -> None:
+    note_id = await _make_note(conn)
+    provenance_id = await provenance.insert_activity(
+        conn,
+        note_id=note_id,
+        activity_type="ingested",
+        provider=None,
+        model=None,
+        human_edited=False,
+        occurred_at="2026-08-28T00:00:00+00:00",
+        recorded_at="2026-08-28T00:00:01+00:00",
+    )
+    malicious_url = "https://example.com/?q=1'; DROP TABLE provenance_sources; --"
+
+    await provenance.insert_source(conn, provenance_id=provenance_id, url=malicious_url)
+
+    cursor = await conn.execute(
+        "SELECT url FROM provenance_sources WHERE provenance_id = ?", (provenance_id,)
+    )
+    row = await cursor.fetchone()
+    assert row is not None
+    assert row[0] == malicious_url

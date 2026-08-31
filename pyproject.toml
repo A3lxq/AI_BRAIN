@@ -9,6 +9,8 @@ dependencies = [
     "pyyaml>=6.0",
     "huey>=2.5.0",
     "detect-secrets>=1.5.0",
+    "aiosqlite>=0.20.0",
+    "watchdog>=5.0.0",
 ]
 
 [project.scripts]
@@ -17,6 +19,7 @@ ai-brain = "ai_brain.cli:main"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-asyncio>=0.24.0",
     "ruff>=0.6.0",
     "mypy>=1.11",
     "types-PyYAML",
@@ -33,6 +36,7 @@ packages = ["src/ai_brain"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-ra"
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
