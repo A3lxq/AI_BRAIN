@@ -17,6 +17,7 @@ def _config(
         huey_db_path=data_dir / "huey.db",
         huey_serializer_secret=secret,
         secret_scanner_block_on_high_confidence=False,
+        qdrant_url="http://127.0.0.1:6333",
         log_level="INFO",
     )
 

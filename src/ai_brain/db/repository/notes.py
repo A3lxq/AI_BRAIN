@@ -15,7 +15,7 @@ import aiosqlite
 _COLUMNS = (
     "id, path, title, origin, provider, model, folder, status, confidence, "
     "content_hash, chunk_count, tags_text, created_at, updated_at, "
-    "last_indexed_at, deleted_at, secret_scan_status"
+    "last_indexed_at, deleted_at, secret_scan_status, index_state, last_index_error"
 )
 
 
@@ -38,6 +38,8 @@ class NoteRow:
     last_indexed_at: str | None
     deleted_at: str | None
     secret_scan_status: str
+    index_state: str
+    last_index_error: str | None
 
 
 def _row_to_note(row: Any) -> NoteRow:
@@ -59,6 +61,8 @@ def _row_to_note(row: Any) -> NoteRow:
         last_indexed_at=row[14],
         deleted_at=row[15],
         secret_scan_status=row[16],
+        index_state=row[17],
+        last_index_error=row[18],
     )
 
 
@@ -67,6 +71,14 @@ async def get_by_path(conn: aiosqlite.Connection, path: str) -> NoteRow | None:
     # parameter is bound, not interpolated. noqa: S608 -- false positive.
     cursor = await conn.execute(
         f"SELECT {_COLUMNS} FROM notes WHERE path = ?", (path,)  # noqa: S608
+    )
+    row = await cursor.fetchone()
+    return None if row is None else _row_to_note(row)
+
+
+async def get_by_id(conn: aiosqlite.Connection, note_id: int) -> NoteRow | None:
+    cursor = await conn.execute(
+        f"SELECT {_COLUMNS} FROM notes WHERE id = ?", (note_id,)  # noqa: S608
     )
     row = await cursor.fetchone()
     return None if row is None else _row_to_note(row)
@@ -157,6 +169,40 @@ async def update_secret_scan_status(
         (secret_scan_status, note_id),
     )
     await conn.commit()
+
+
+async def mark_indexed(
+    conn: aiosqlite.Connection, note_id: int, *, chunk_count: int, indexed_at: str
+) -> None:
+    """The success-path commit marker for docs/design/indexing-pipeline.md
+    §2.5 step 8 -- sets index_state='current', clears any prior
+    last_index_error, and records the new chunk_count/last_indexed_at
+    together in one write."""
+    await conn.execute(
+        "UPDATE notes SET index_state = 'current', last_index_error = NULL, "
+        "chunk_count = ?, last_indexed_at = ? WHERE id = ?",
+        (chunk_count, indexed_at, note_id),
+    )
+    await conn.commit()
+
+
+async def mark_index_failed(conn: aiosqlite.Connection, note_id: int, *, error: str) -> None:
+    await conn.execute(
+        "UPDATE notes SET index_state = 'failed', last_index_error = ? WHERE id = ?",
+        (error, note_id),
+    )
+    await conn.commit()
+
+
+async def list_ids_needing_index(conn: aiosqlite.Connection) -> list[int]:
+    """Every active note not currently indexed -- covers both never-indexed
+    (the `'stale'` migration default) and previously-`'failed'` notes.
+    Feeds `ai-brain index bootstrap` (design doc §6)."""
+    cursor = await conn.execute(
+        "SELECT id FROM notes WHERE deleted_at IS NULL AND index_state != 'current'"
+    )
+    rows = await cursor.fetchall()
+    return [row[0] for row in rows]
 
 
 async def list_active_paths(conn: aiosqlite.Connection) -> set[str]:

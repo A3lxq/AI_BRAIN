@@ -11,10 +11,21 @@ bootstrap`), not a fire-and-forget background job -- there is no requirement
 here for the queue hop's concurrency/retry machinery, and idempotency
 (design doc §2.4 step 6) already makes bootstrap safe to overlap with a live
 watcher or to re-run against an already-ingested vault.
+
+Per docs/design/indexing-pipeline.md §2.6: when `qdrant_client` is supplied,
+each successful ingest is chained directly into `index_note()` (the Phase 3
+counterpart), not enqueued -- the same one-shot/low-scale reasoning already
+applied above. `qdrant_client` is optional so bootstrap remains usable for
+metadata-only ingestion when indexing isn't wanted or Qdrant isn't reachable
+(e.g. this development environment's current Docker-access blocker, §0/§8
+of that design doc) -- a per-note indexing failure is caught and logged,
+never aborting the rest of the bootstrap run, since `index_note` itself
+already records the failure in `notes.index_state` before re-raising.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -25,13 +36,17 @@ from uuid import uuid4
 
 import aiosqlite
 from huey import Huey
+from qdrant_client import QdrantClient
 
 from ai_brain.db.repository import events as events_repo
 from ai_brain.db.repository import research_jobs as research_jobs_repo
+from ai_brain.indexing.index_note import index_note
 from ai_brain.safety.paths import VaultRoot
 from ai_brain.vault.ingest import ingest_note
 
 __all__ = ["BootstrapSummary", "bootstrap_ingest_vault"]
+
+logger = logging.getLogger(__name__)
 
 _EXCLUDED_DIR_NAMES = frozenset({".git", ".obsidian"})
 
@@ -67,6 +82,7 @@ async def bootstrap_ingest_vault(
     vault_root: VaultRoot,
     *,
     block_on_high_confidence_secrets: bool = False,
+    qdrant_client: QdrantClient | None = None,
 ) -> BootstrapSummary:
     correlation_id = str(uuid4())
     started_at = datetime.now(UTC).isoformat()
@@ -96,6 +112,23 @@ async def bootstrap_ingest_vault(
         outcome_counts[result.outcome] = outcome_counts.get(result.outcome, 0) + 1
         if result.outcome == "scan_error":
             notes_failed += 1
+
+        if (
+            qdrant_client is not None
+            and result.outcome in {"created", "updated"}
+            and result.note_id is not None
+        ):
+            try:
+                await index_note(
+                    conn,
+                    qdrant_client,
+                    vault_root,
+                    result.note_id,
+                    correlation_id=correlation_id,
+                    causation_id=None,
+                )
+            except Exception:
+                logger.exception("indexing failed for note_id=%s during bootstrap", result.note_id)
 
     duration_ms = int((perf_counter() - start) * 1000)
     finished_at = datetime.now(UTC).isoformat()

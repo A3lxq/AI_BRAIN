@@ -11,6 +11,10 @@ dependencies = [
     "detect-secrets>=1.5.0",
     "aiosqlite>=0.20.0",
     "watchdog>=5.0.0",
+    "chonkie>=1.7.0",
+    "sentence-transformers>=6.0.0",
+    "fastembed>=0.7.0",
+    "qdrant-client>=1.16.0",
 ]
 
 [project.scripts]

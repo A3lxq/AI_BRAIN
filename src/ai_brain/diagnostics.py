@@ -20,6 +20,7 @@ from typing import Literal
 
 from huey import SqliteHuey
 from huey.serializer import SignedSerializer
+from qdrant_client import QdrantClient
 
 from ai_brain.config import AIBrainConfig
 from ai_brain.db.connection import open_connection
@@ -163,6 +164,19 @@ def _check_schema_version(config: AIBrainConfig) -> DoctorCheck:
     )
 
 
+def _check_qdrant_reachable(config: AIBrainConfig) -> DoctorCheck:
+    # warn, not fail: Qdrant is a separate deployment concern from AI_BRAIN's
+    # own process health (design doc §6), matching bwrap_available/
+    # docker_available's own warn-level, optional-dependency posture below.
+    try:
+        QdrantClient(url=config.qdrant_url, timeout=3).get_collections()
+    except Exception as exc:
+        return DoctorCheck(
+            "qdrant_reachable", "warn", f"Qdrant unreachable at {config.qdrant_url}: {exc}"
+        )
+    return DoctorCheck("qdrant_reachable", "ok", f"Qdrant reachable at {config.qdrant_url}")
+
+
 def _check_external_tool(name: str, binary: str, *, required: bool) -> DoctorCheck:
     found = shutil.which(binary)
     if found:
@@ -187,6 +201,7 @@ def run_doctor(config: AIBrainConfig) -> DoctorReport:
         _check_schema_version(config),
         _check_huey_serializer(config),
         _check_secret_scanner(),
+        _check_qdrant_reachable(config),
         _check_external_tool("git_available", "git", required=True),
         _check_external_tool("bwrap_available", "bwrap", required=False),
         _check_external_tool("systemctl_available", "systemctl", required=False),

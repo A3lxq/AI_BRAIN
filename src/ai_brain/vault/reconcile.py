@@ -31,6 +31,7 @@ Deviation from the design doc's literal text, flagged rather than silent:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import perf_counter
@@ -38,14 +39,18 @@ from uuid import uuid4
 
 import aiosqlite
 from huey import Huey
+from qdrant_client import QdrantClient
 
 from ai_brain.db.repository import events as events_repo
 from ai_brain.db.repository import notes as notes_repo
+from ai_brain.indexing.index_note import index_note
 from ai_brain.safety.paths import VaultRoot
 from ai_brain.vault.bootstrap import iter_markdown_files
 from ai_brain.vault.ingest import IngestOutcome, ingest_note
 
 __all__ = ["ReconciliationSummary", "reconcile_vault"]
+
+logger = logging.getLogger(__name__)
 
 # ingest_note's outcome, mapped to EVENT_MODEL.md §1.6's closed
 # discrepancy_type enum (missing_from_index | missing_from_disk |
@@ -77,6 +82,7 @@ async def reconcile_vault(
     vault_root: VaultRoot,
     *,
     block_on_high_confidence_secrets: bool = False,
+    qdrant_client: QdrantClient | None = None,
 ) -> ReconciliationSummary:
     correlation_id = str(uuid4())
     start = perf_counter()
@@ -118,6 +124,29 @@ async def reconcile_vault(
                     "note_id": result.note_id,
                 },
             )
+
+        # Per docs/design/indexing-pipeline.md §2.6: chained directly, same
+        # optional/best-effort posture as ai_brain.vault.bootstrap -- a
+        # per-note indexing failure never aborts the rest of the sweep,
+        # since index_note already records the failure itself.
+        if (
+            qdrant_client is not None
+            and result.outcome in {"created", "updated"}
+            and result.note_id is not None
+        ):
+            try:
+                await index_note(
+                    conn,
+                    qdrant_client,
+                    vault_root,
+                    result.note_id,
+                    correlation_id=correlation_id,
+                    causation_id=None,
+                )
+            except Exception:
+                logger.exception(
+                    "indexing failed for note_id=%s during reconciliation", result.note_id
+                )
 
     for vault_relative, absolute_path in on_disk.items():
         await _reconcile_one(vault_relative, absolute_path)

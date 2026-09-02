@@ -35,6 +35,7 @@ class AIBrainConfig:
     huey_db_path: Path
     huey_serializer_secret: str | None
     secret_scanner_block_on_high_confidence: bool
+    qdrant_url: str
     log_level: str
 
     @property
@@ -64,6 +65,8 @@ def load_config() -> AIBrainConfig:
       AI_BRAIN_SECRET_SCANNER_BLOCK_HIGH  -- "true" to hard-block high-confidence secret findings
                                               instead of redact-and-flag (default: false, per
                                               docs/design/pre-ingestion-secret-scanning.md §4.2)
+      AI_BRAIN_QDRANT_URL                 -- Qdrant server URL (default: http://127.0.0.1:6333,
+                                              matching ADR-0006's 127.0.0.1-only binding)
       AI_BRAIN_LOG_LEVEL                  -- Python logging level name (default: INFO)
     """
     data_dir = _env_path("AI_BRAIN_DATA_DIR") or DEFAULT_DATA_DIR
@@ -76,5 +79,6 @@ def load_config() -> AIBrainConfig:
         secret_scanner_block_on_high_confidence=_env_bool(
             "AI_BRAIN_SECRET_SCANNER_BLOCK_HIGH", default=False
         ),
+        qdrant_url=os.environ.get("AI_BRAIN_QDRANT_URL", "http://127.0.0.1:6333"),
         log_level=os.environ.get("AI_BRAIN_LOG_LEVEL", "INFO"),
     )

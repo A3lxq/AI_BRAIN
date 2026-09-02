@@ -10,21 +10,29 @@ Ground-up development with Claude Code
 
 ## Current Phase
 
-Phase 2 — Vault Engine (in progress; Phase 1 Foundation is complete)
+Phase 3 — Indexing (in progress; Phases 1 and 2 are complete and committed)
 
 ## Current Status
 
-**Phase 0 is fully closed** (all eleven ADRs accepted, all exit criteria satisfied). **Phase 1 foundational scaffolding is complete**: `src/ai_brain` package, config/logging/CLI/doctor, and all four P0 security modules (`ai_brain.safety.*`, `ai_brain.hardening.*`, `ai_brain.security.secrets`), plus the OS-sandboxing deployment configs. This was committed and pushed to `github.com/A3lxq/AI_BRAIN` (`main`, commit `a4050d3` merged with the repo's pre-existing history as `d97840d`).
+**Phase 0 is fully closed** (all eleven ADRs accepted, all exit criteria satisfied). **Phase 1 (Foundation)** and **Phase 2 (Vault Engine)** are both complete, tested, and committed/pushed to `github.com/A3lxq/AI_BRAIN` `main`:
+- Phase 1 (`a4050d3`, merged as `d97840d`): package scaffolding, config/logging/CLI/doctor, all four P0 security modules, OS-sandboxing deployment configs.
+- Phase 2 (`aa76ce7`): SQLite migration runner, repository layer, filesystem watcher, the idempotent `ingest_note` job, bootstrap/reconcile, `ai_brain.worker`.
 
-**Phase 2 (Vault Engine) foundational slice is now implemented, tested, and verified end-to-end**, per `docs/design/migration-runner-and-vault-ingestion.md` (accepted 2026-08-28, implemented 2026-08-31):
+**Phase 3 (Indexing) is now implemented and tested**, per `docs/design/indexing-pipeline.md` (accepted 2026-09-02, implemented 2026-09-02):
 
-- `ai_brain.db.migrate` — SQLite migration runner (`PRAGMA user_version` + numbered `.sql` files), with real atomic rollback-on-failure and checksum-drift detection verified empirically. **Real gotcha found and fixed during implementation**: `aiosqlite`/stdlib `sqlite3`'s `executescript()` silently auto-commits each statement regardless of an enclosing transaction — migrations are instead split into individual statements (respecting `CREATE TRIGGER ... BEGIN ... END;` bodies) and executed one at a time inside an explicit `BEGIN`/`COMMIT`/`ROLLBACK`.
-- `ai_brain.db.repository.*` — typed async repository functions (notes, tags, provenance, lifecycle, events, research_jobs, secret_findings) over the migrated schema.
-- `ai_brain.vault.provenance_inference`, `ai_brain.vault.watcher` (real filesystem debouncing over `watchdog` 6.0.0, with a genuine behavioral discrepancy found and handled: watchdog synthesizes spurious parent-directory events), `ai_brain.vault.lifecycle`, `ai_brain.vault.ingest` (the idempotent per-path ingestion job — metadata/provenance/lifecycle/secret-scan persistence, move/delete detection, deliberately stops short of chunking/embedding which is Phase 3), `ai_brain.vault.bootstrap`, `ai_brain.vault.reconcile`.
-- `ai_brain.worker` — the Huey entry point resolving the systemd unit's `ai_brain.worker` placeholder from Phase 1.
-- CLI: `ai-brain migrate`, `ai-brain ingest bootstrap`, `ai-brain ingest reconcile`; doctor gained a `schema_version` check.
+- `ai_brain.indexing.chunking` — structure-aware Markdown chunking via `chonkie` 1.7.0, hand-built heading-aware `RecursiveRules` (never `from_recipe()`, which makes a live HuggingFace Hub network call). **Empirically confirmed**: chunk boundaries fall exactly on AI_BRAIN's real conversational-turn headers (`# you asked`, `### USER`) — no custom pre-splitter needed.
+- `ai_brain.indexing.embedding` — dense embeddings (`BAAI/bge-m3`, 1024-dim, revision-pinned to a resolved commit hash) and sparse embeddings (`Qdrant/minicoil-v1` via `fastembed`, no revision-pinning mechanism exists for this one — a real, documented gap, not silently faked).
+- `ai_brain.indexing.qdrant_store` — collection/alias lifecycle (atomic alias updates, lock-guarded), point upsert/delete, payload indexes.
+- `ai_brain.indexing.index_note` — the idempotent per-note indexing job, chained after `ingest_note()`'s success. Embedding and the Qdrant upsert both happen *before* any SQLite `chunks` row is written, guaranteeing zero partial rows on failure.
+- `ai_brain.worker`/`ai_brain.vault.bootstrap`/`ai_brain.vault.reconcile` all wired to chain indexing after ingestion, with graceful degradation to metadata-only ingestion when Qdrant is unreachable (verified live).
+- Migration 0004: `notes.index_state`/`last_index_error` — resolves Phase 2's deliberately deferred item.
+- CLI: `ai-brain index bootstrap`; doctor gained a `qdrant_reachable` check (warn, not fail, when unreachable).
 
-211/211 tests passing, mypy --strict clean, ruff clean. **Live end-to-end verification performed**: `ai-brain migrate` → `ai-brain doctor` (all-ok) → `ai-brain ingest bootstrap` against a fixture vault covering all three real content shapes (ChatGPT-style, Qwen-style, OWASP-style) → correct `notes`/`provenance`/`note_lifecycle_history`/`events` rows confirmed by direct DB inspection → `ai-brain ingest reconcile` confirmed a true no-op. **This work has not yet been committed** — awaiting explicit user go-ahead, per standing practice.
+**A critical CVE (CVE-2026-68770, CVSS 9.8) in `sentence-transformers` was found during research and resolved by direct source verification** — confirmed fixed in v6.0.0 (three weeks after disclosure) by reading the actual GitHub source at the exact pre-fix and post-fix versions; `sentence-transformers>=6.0.0` is now pinned.
+
+241/241 tests passing (4 correctly `skip`-marked, not silently omitted, pending Qdrant/Docker access), mypy --strict clean, ruff clean. **Live end-to-end verification performed**: `ai-brain migrate` (4 migrations) → `ai-brain doctor` (correctly reports `qdrant_reachable: warn`, connection refused) → `ai-brain ingest bootstrap` (gracefully degrades to metadata-only, confirmed via DB inspection: `index_state='stale'`, zero orphaned `chunks` rows) → `ai-brain index bootstrap` (fails cleanly with a readable error, not a raw traceback, when Qdrant is unreachable). **This session's Phase 3 work has not yet been committed** — awaiting explicit user go-ahead, per standing practice.
+
+**Known environment blocker, not a code gap**: this development environment's user account is not in the `docker` group and interactive `sudo` is unavailable, so a live Qdrant server cannot be started here. Every test needing one is written as real, correct code but marked `skip` with a clear reason — see `docs/design/indexing-pipeline.md` §0/§8.
 
 ## Accepted Architecture
 
@@ -106,22 +114,28 @@ Phase 2 — Vault Engine (in progress; Phase 1 Foundation is complete)
 - Repository layer (`ai_brain.db.repository.{notes,tags,provenance,lifecycle,events,research_jobs,secret_findings}`), provenance inference, filesystem watcher (real `watchdog` 6.0.0 behavior verified, one genuine discrepancy found: spurious `DirModifiedEvent` synthesis), vault lifecycle service, the idempotent `ingest_note` job (secret-scan persistence into ADR-0011's schema now wired to a real caller for the first time), bootstrap, reconciliation, and `ai_brain.worker` all implemented 2026-08-31
 - CLI gained `ai-brain migrate`/`ai-brain ingest bootstrap`/`ai-brain ingest reconcile`; doctor gained a `schema_version` check
 - 211/211 tests passing, mypy --strict clean, ruff clean; live end-to-end CLI verification against a 3-note fixture vault (all three real content shapes) confirmed correct database state 2026-08-31
+- Phase 2 work committed and pushed to `github.com/A3lxq/AI_BRAIN` `main` 2026-08-31 (`aa76ce7`)
+- `docs/design/indexing-pipeline.md` drafted and accepted 2026-09-02 — chunking, embedding, Qdrant store, the `index_note` job, `index_state` schema resolution; research included a critical `sentence-transformers` CVE found and resolved by direct source verification
+- `ai_brain.indexing.{chunking,embedding,qdrant_store,index_note}` implemented and tested 2026-09-02; `ai_brain.worker`/`ai_brain.vault.bootstrap`/`ai_brain.vault.reconcile` wired to chain indexing after ingestion with graceful Qdrant-unreachable degradation; migration 0004 (`index_state`/`last_index_error`)
+- CLI gained `ai-brain index bootstrap`; doctor gained a `qdrant_reachable` check
+- 241/241 tests passing (4 correctly skipped pending Docker/Qdrant access), mypy --strict clean, ruff clean; live end-to-end CLI verification (migrate/doctor/ingest bootstrap/index bootstrap) confirmed correct graceful-degradation behavior 2026-09-02
 
 ## Not Yet Completed
 
 - Adding `secret_findings_list`/`secret_finding_resolve` to ADR-0007's tool contract table (a lightweight cross-reference now, or a full entry at implementation time — open question in ADR-0011)
-- `notes.index_state`/`last_index_error` columns — deliberately deferred to Phase 3's indexing design doc, which owns the job that would set them (see `docs/design/migration-runner-and-vault-ingestion.md` §1/§8)
-- Status promotion from `draft` to `active` — no mechanism decided yet for when freshly-ingested legacy content leaves `draft` (design doc §8 open item)
-- `watchdog`'s CVE/maintainer-trust supply-chain review — flagged as required before this design was implemented but not yet actually done (design doc §6/§8)
-- Chunking/embedding/Qdrant upsert (Phase 3 — `chunks` table exists in schema but nothing writes to it yet)
+- Status promotion from `draft` to `active` — no mechanism decided yet for when freshly-ingested legacy content leaves `draft` (open item, carried since Phase 2's design doc §8)
+- `watchdog`'s CVE/maintainer-trust supply-chain review — still flagged as required, not yet actually done
+- `fastembed`/miniCOIL has no revision-pinning mechanism — a real, documented gap in `SECURITY_MODEL.md` P1 item 15's coverage; open until fastembed adds one or AI_BRAIN builds a pre-downloaded-snapshot wrapper
+- **Live Qdrant integration testing is blocked in this development environment** — the current user isn't in the `docker` group and interactive `sudo` isn't available; 4 real, correct integration tests are written and `skip`-marked pending this
 - `ai_brain.mcp_server` (stdio MCP server entry point) — still only a placeholder in the bubblewrap script; Phase 6
 - Deciding the real install location/venv path referenced by the systemd unit and bwrap script (currently placeholder paths under `%h`/`$HOME`)
-- Committing this Phase 2 work to git (nothing has been committed yet this session — awaiting explicit user go-ahead)
+- Reranking, query-time hybrid fusion, and the retrieval-evaluation corpus — all deliberately out of Phase 3's scope, deferred to Phase 4 (Retrieval)
+- Committing this Phase 3 work to git (nothing has been committed yet this session — awaiting explicit user go-ahead)
 
 ## Immediate Next Step
 
-Decide with the user whether to commit the current Phase 2 vault-ingestion work now. After that, the next substantive work is Phase 3 (Indexing): chunking (`chonkie`), embedding (`sentence-transformers`), Qdrant vector index, FTS5 keyword search wiring, and the `index_state` column this session's design doc deliberately deferred — plus giving `watchdog` the supply-chain scrutiny still outstanding.
+Decide with the user whether to commit the current Phase 3 indexing work now, and whether to resolve the Docker-access blocker (add the current user to the `docker` group, restart the session) so the 4 skipped integration tests can actually run against a live Qdrant server before Phase 3 is considered fully verified. After that, the next substantive work is Phase 4 (Retrieval): hybrid fusion, filters, ranking, reranking (`bge-reranker-v2-m3`, not yet installed — deliberately deferred), context construction, and the retrieval-evaluation corpus.
 
 ## Important Constraint
 
-Do not start production implementation until Phase 0 exit criteria are satisfied. (Satisfied — Phase 1 and the Phase 2 foundational slice are both implemented and verified.)
+Do not start production implementation until Phase 0 exit criteria are satisfied. (Satisfied — Phases 1, 2, and 3 are all implemented and tested.)

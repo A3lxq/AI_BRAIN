@@ -58,13 +58,22 @@
 - `ai_brain.worker`: the Huey entry point (`huey_consumer.py ai_brain.worker.huey`), resolving the systemd unit's placeholder from Phase 1.
 - CLI: `ai-brain migrate`, `ai-brain ingest bootstrap`, `ai-brain ingest reconcile`; `ai-brain doctor` gained a `schema_version` check.
 - Test suite: 211 tests total (124 new this session) — all passing; mypy --strict clean; ruff clean. Live end-to-end CLI verification performed against a 3-note fixture vault covering all three real content shapes.
+- Phase 2 work committed and pushed to `github.com/A3lxq/AI_BRAIN` `main` (`aa76ce7`).
+- `docs/design/indexing-pipeline.md`: design for chunking, embedding, Qdrant store, and the `index_note` job (ADR-0003/0006/0008), including a critical `sentence-transformers` CVE (CVE-2026-68770) found during research and resolved by direct GitHub source verification against the exact pre-fix and post-fix versions.
+- `ai_brain.indexing.chunking`: structure-aware Markdown chunking via `chonkie`, hand-built heading-aware rules (never `from_recipe()`, which makes a live network call). Empirically confirmed to split on AI_BRAIN's real conversational-turn headers.
+- `ai_brain.indexing.embedding`: dense (`BAAI/bge-m3`, revision-pinned) and sparse (`Qdrant/minicoil-v1` via `fastembed`, no pinning mechanism exists — documented gap) embedding generation.
+- `ai_brain.indexing.qdrant_store`: collection/alias lifecycle (atomic, lock-guarded alias mutation — resolves `SECURITY_MODEL.md` P1 item 11), point upsert/delete, payload indexes.
+- `ai_brain.indexing.index_note`: the idempotent per-note indexing job, chained after `ingest_note()`'s success; embeds and upserts to Qdrant before any SQLite `chunks` row is written, guaranteeing zero partial rows on failure.
+- Migration 0004: `notes.index_state`/`last_index_error` — resolves Phase 2's deliberately deferred item.
+- `ai_brain.worker`/`ai_brain.vault.bootstrap`/`ai_brain.vault.reconcile`: wired to chain indexing after ingestion, with graceful degradation to metadata-only ingestion when Qdrant is unreachable.
+- CLI: `ai-brain index bootstrap`; `ai-brain doctor` gained a `qdrant_reachable` check.
+- Test suite: 241 tests total (30 new this session, 4 correctly `skip`-marked pending Docker/Qdrant access in this environment) — all passing; mypy --strict clean; ruff clean. Live end-to-end CLI verification performed, including confirming graceful degradation when Qdrant is unreachable.
 
 ### Not yet implemented
-- `notes.index_state`/`last_index_error` columns (deliberately deferred to Phase 3's own indexing design doc)
 - Status promotion from `draft` to `active` (no mechanism decided yet)
 - `watchdog` supply-chain review (flagged as required, not yet performed)
+- `fastembed`/miniCOIL revision pinning (no mechanism exists upstream)
 - `ai_brain.mcp_server` (MCP server entry point)
-- Retrieval engine
-- Indexing engine
+- Retrieval engine (hybrid fusion, reranking, context construction)
 - Event engine
 - Git automation module

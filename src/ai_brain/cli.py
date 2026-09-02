@@ -96,6 +96,22 @@ def _cmd_ingest_reconcile(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_index_bootstrap(_args: argparse.Namespace) -> int:
+    from ai_brain.worker import run_index_bootstrap
+
+    # Unlike ingest bootstrap/reconcile, this command has no meaningful
+    # metadata-only fallback -- it IS the indexing command -- so a Qdrant
+    # connection failure is reported as a clean CLI error, not degraded
+    # silently or left to leak a raw traceback (design doc §6/§8).
+    try:
+        summary = run_index_bootstrap()
+    except Exception as exc:
+        print(f"[FAIL] unable to reach Qdrant: {exc}")
+        return 1
+    print(f"notes_indexed={summary.notes_indexed} notes_failed={summary.notes_failed}")
+    return 1 if summary.notes_failed else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ai-brain", description="AI_BRAIN CLI")
     parser.add_argument(
@@ -126,6 +142,14 @@ def build_parser() -> argparse.ArgumentParser:
         "reconcile", help="run one on-demand reconciliation pass"
     )
     reconcile_parser.set_defaults(func=_cmd_ingest_reconcile)
+
+    index_parser = subparsers.add_parser("index", help="indexing pipeline commands")
+    index_subparsers = index_parser.add_subparsers(dest="index_command", required=True)
+
+    index_bootstrap_parser = index_subparsers.add_parser(
+        "bootstrap", help="index every note not currently indexed"
+    )
+    index_bootstrap_parser.set_defaults(func=_cmd_index_bootstrap)
 
     return parser
 

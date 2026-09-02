@@ -70,6 +70,7 @@ def test_build_huey_hard_fails_without_a_secret(
         huey_db_path=tmp_path / "huey.db",
         huey_serializer_secret=None,
         secret_scanner_block_on_high_confidence=False,
+        qdrant_url="http://127.0.0.1:6333",
         log_level="INFO",
     )
     with pytest.raises(SerializerMisconfigured):
