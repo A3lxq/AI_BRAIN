@@ -1,7 +1,7 @@
-# Research: Go as AI_BRAIN Runtime
+# Research: Go as ATHENA AI-BRAIN Runtime
 
 - **Research date:** 2026-08-22
-- **Researcher:** Claude Code (AI_BRAIN Phase 0)
+- **Researcher:** Claude Code (ATHENA AI-BRAIN Phase 0)
 - **Status:** Candidate evaluation — feeds ADR-0001 (language/runtime selection)
 
 ## 1. Executive Summary
@@ -10,7 +10,7 @@ Go's biggest surprise finding is a genuinely official, Google-co-maintained MCP 
 
 ## 2. Problem Being Solved
 
-AI_BRAIN needs one runtime for: vault filesystem watching, Markdown/YAML parsing, structure-aware chunking, embeddings, hybrid retrieval (vector + keyword + metadata + reranking), SQLite metadata storage, a Qdrant vector store client, one unified MCP server decoupled from business logic, multi-LLM-provider abstraction, and safe Git automation — running local-first on Linux (Kali), with strong async/event-driven job handling and a security posture that treats retrieved content as untrusted.
+ATHENA AI-BRAIN needs one runtime for: vault filesystem watching, Markdown/YAML parsing, structure-aware chunking, embeddings, hybrid retrieval (vector + keyword + metadata + reranking), SQLite metadata storage, a Qdrant vector store client, one unified MCP server decoupled from business logic, multi-LLM-provider abstraction, and safe Git automation — running local-first on Linux (Kali), with strong async/event-driven job handling and a security posture that treats retrieved content as untrusted.
 
 ## 3. Technology Overview
 
@@ -18,7 +18,7 @@ Go 1.27.0 (released 2026-08-19) is Google-originated and Google-stewarded, with 
 
 ## 4. Architecture Fit
 
-- **Goroutines + channels + `context.Context`** (all stdlib) are a mature, idiomatic fit for AI_BRAIN's exact pattern: workers `select` on a job channel and `ctx.Done()` for graceful cancellation/shutdown. This is a genuine Go strength, not a compromise, and directly matches the "long-running jobs, non-blocking handlers" requirement.
+- **Goroutines + channels + `context.Context`** (all stdlib) are a mature, idiomatic fit for ATHENA AI-BRAIN's exact pattern: workers `select` on a job channel and `ctx.Done()` for graceful cancellation/shutdown. This is a genuine Go strength, not a compromise, and directly matches the "long-running jobs, non-blocking handlers" requirement.
 - **Filesystem watching**: `fsnotify/fsnotify` is the standard, but has **no recursive watching** (subdirectories must be added manually) and requires watching both source and destination directories to correlate move/rename events — real implementation work for reliable vault-sync semantics, not a drop-in solution.
 - **Job architecture**: no dominant library is needed — the idiomatic pattern (fsnotify → buffered channel → goroutine worker pool coordinated via `context.Context`) is standard, well-trodden Go practice. Redis-backed options (`hibiken/asynq`) exist but add an unwanted external dependency for local-first use.
 - **SQLite driver fork-in-the-road**: `mattn/go-sqlite3` (cgo, best performance/feature parity, but breaks trivial static-binary builds — requires cross-compiler toolchain gymnastics) vs. `modernc.org/sqlite` (pure Go, no cgo, trivial cross-compilation and true static binaries, some performance cost). Cannot have both without compromise — this is a concrete, unavoidable Phase 0 decision.
@@ -35,7 +35,7 @@ Evaluated in parallel: Python, TypeScript/Node.js, Rust (see sibling research do
 | 2 | MCP support | **Official SDK** (`modelcontextprotocol/go-sdk`), maintained in collaboration with Google, v1.7.0, tracking the 2026-07-28 spec with backward compatibility to four earlier revisions. Full server+client; transports cover stdio, SSE, and streamable HTTP; generic-based automatic JSON schema generation for tools; OpenSSF Scorecard badge, 5,000+ stars. Community SDK `mark3labs/mcp-go` remains a credible fallback (1,880 importing projects) but is a distinct, non-absorbed project one spec revision behind. |
 | 3 | AI/RAG ecosystem | **Thin — the clearest weakness.** `langchaingo` (9.6k stars) is in maintainer-handoff limbo per its own README; `cloudwego/eino` (ByteDance) is more actively backed but China-centric. No framework approaches LangChain/LlamaIndex's breadth. Official SDKs exist for OpenAI, Google Gemini, and Ollama embeddings; Anthropic has no embeddings endpoint (true across all languages). No pure-Go local embedding inference — requires cgo bindings to llama.cpp/ONNX. Chunking has no semantic-chunking library; `yuin/goldmark` (standard CommonMark parser) + `go.abhg.dev/goldmark/frontmatter` (YAML+TOML, typed structs) would need a hand-built AST-walking chunker. Reranking is API-only (Cohere's official Go SDK). |
 | 4 | Filesystem/event tooling | `fsnotify` is the mature standard but lacks recursive watching and needs explicit source+destination tracking for move/rename correlation. No dominant job-queue library needed — hand-rolled channel+worker-pool pattern is idiomatic and standard. |
-| 5 | SQLite support | Real trade-off: `mattn/go-sqlite3` (cgo, full feature parity/best performance, actively maintained v1.14.50 as of Aug 2026) vs. `modernc.org/sqlite` (pure Go, no cgo, enables true static binaries and trivial cross-compilation). Given AI_BRAIN's local-first/single-binary deployment goals, `modernc.org/sqlite` is the stronger default despite some performance cost. |
+| 5 | SQLite support | Real trade-off: `mattn/go-sqlite3` (cgo, full feature parity/best performance, actively maintained v1.14.50 as of Aug 2026) vs. `modernc.org/sqlite` (pure Go, no cgo, enables true static binaries and trivial cross-compilation). Given ATHENA AI-BRAIN's local-first/single-binary deployment goals, `modernc.org/sqlite` is the stronger default despite some performance cost. |
 | 6 | Vector DB clients | `github.com/qdrant/go-client` — **official**, published under the `qdrant` org, gRPC-based, covers collections/points/search/filtering. A genuine strength. |
 | 7 | Async/concurrency | Goroutines/channels/`context.Context` are mature and idiomatic — a natural fit for the event-driven architecture. Go 1.27 added goroutine leak profiling, directly useful for a long-running indexing daemon. |
 | 8 | Type safety | Static typing throughout; generics (since 1.18) matured further with generic methods in 1.26/1.27 (generic interface methods remain impossible by design). Community sentiment on generics is split (some report overuse hurting readability). Explicit `if err != nil` error handling — no shorthand has shipped. Nil pointer/nil-interface footguns remain a real gotcha. |
@@ -47,9 +47,9 @@ Evaluated in parallel: Python, TypeScript/Node.js, Rust (see sibling research do
 | 14 | Developer productivity | Fast compilation is an explicit, long-standing Go design goal. `Delve` is the standard, actively-maintained debugger; IDE support is solid. Honest assessment: core tooling strength does **not** offset the AI/RAG ecosystem gap — expect materially more boilerplate/hand-rolled integration work for AI/RAG-specific parts than Python/TS, even with an excellent general engineering experience. |
 | 15 | Long-term viability | Google-stewarded, no separate foundation; predictable two-releases-per-year cadence with clear support windows. Active 2026 roadmap (GC rework, generics expansion, JSON v2, goroutine leak profiling, SIMD) shows continued investment, no signs of Google divestment. Dominant in cloud-native infrastructure. |
 
-## 7. AI_BRAIN Relevance
+## 7. ATHENA AI-BRAIN Relevance
 
-The official, Google-co-maintained MCP SDK and official Qdrant client cover two of AI_BRAIN's most architecturally central requirements as well as any candidate. The concurrency model is an excellent natural fit for the event-driven job architecture. The clear gap is the AI/RAG orchestration layer: AI_BRAIN would need to hand-build meaningfully more of the chunking/retrieval-fusion/reranking-integration logic than in Python, and the SQLite-driver and local-embedding-inference decisions both force a compromise between deployment simplicity and feature completeness/performance that Python and TypeScript don't force as sharply.
+The official, Google-co-maintained MCP SDK and official Qdrant client cover two of ATHENA AI-BRAIN's most architecturally central requirements as well as any candidate. The concurrency model is an excellent natural fit for the event-driven job architecture. The clear gap is the AI/RAG orchestration layer: ATHENA AI-BRAIN would need to hand-build meaningfully more of the chunking/retrieval-fusion/reranking-integration logic than in Python, and the SQLite-driver and local-embedding-inference decisions both force a compromise between deployment simplicity and feature completeness/performance that Python and TypeScript don't force as sharply.
 
 ## 8. Security
 
@@ -57,18 +57,18 @@ Strong by default: `exec.Command`'s argument-array API is inherently shell-injec
 
 ## 9. Performance
 
-Directionally strong for both I/O-bound (goroutines) and CPU-bound (compiled, no GIL) work, but no AI_BRAIN-specific or even general head-to-head benchmark was found in this research — any performance claim should be validated against the real workload before being treated as decisive, per the constitution's "measure before optimizing" rule.
+Directionally strong for both I/O-bound (goroutines) and CPU-bound (compiled, no GIL) work, but no ATHENA AI-BRAIN-specific or even general head-to-head benchmark was found in this research — any performance claim should be validated against the real workload before being treated as decisive, per the constitution's "measure before optimizing" rule.
 
 ## 10. Operational Concerns
 
 - The SQLite driver choice (`mattn/go-sqlite3` vs `modernc.org/sqlite`) is a forced, unavoidable trade-off between performance/feature-parity and deployment simplicity — needs an explicit Phase 0 decision.
 - Local embedding inference has no pure-Go path; cgo bindings to llama.cpp/ONNX would reintroduce the same static-binary/cross-compilation complications as the SQLite driver question.
 - `fsnotify`'s lack of recursive watching and its rename/move-correlation requirements add real, non-trivial implementation work for reliable vault-sync semantics.
-- `langchaingo`'s maintainer-handoff status is a governance red flag if AI_BRAIN were to depend on it for orchestration.
+- `langchaingo`'s maintainer-handoff status is a governance red flag if ATHENA AI-BRAIN were to depend on it for orchestration.
 
 ## 11. Recommendation (per-candidate verdict, not final cross-language decision)
 
-Go scores strongly on concurrency-model fit, security defaults, and — unexpectedly — first-party MCP/Qdrant support, but the AI/RAG ecosystem gap is real and would shift significant orchestration/chunking/reranking-integration work onto the AI_BRAIN team compared to Python. Final cross-candidate recommendation is deferred to the comparison matrix and ADR-0001.
+Go scores strongly on concurrency-model fit, security defaults, and — unexpectedly — first-party MCP/Qdrant support, but the AI/RAG ecosystem gap is real and would shift significant orchestration/chunking/reranking-integration work onto the ATHENA AI-BRAIN team compared to Python. Final cross-candidate recommendation is deferred to the comparison matrix and ADR-0001.
 
 ## 12. References
 
@@ -89,7 +89,7 @@ Go scores strongly on concurrency-model fit, security defaults, and — unexpect
 
 ## 13. Open Questions
 
-- `mattn/go-sqlite3` (cgo, performance) vs `modernc.org/sqlite` (pure Go, deployment simplicity) — which does AI_BRAIN prioritize?
+- `mattn/go-sqlite3` (cgo, performance) vs `modernc.org/sqlite` (pure Go, deployment simplicity) — which does ATHENA AI-BRAIN prioritize?
 - Is hand-building the chunking/retrieval-fusion orchestration layer (given no mature framework) an acceptable scope increase versus Python/TypeScript?
 - If local embedding inference is required, is a cgo/ONNX dependency acceptable given its static-binary implications?
-- Should AI_BRAIN use the official `modelcontextprotocol/go-sdk` (recommended) or the more battle-tested community `mark3labs/mcp-go`?
+- Should ATHENA AI-BRAIN use the official `modelcontextprotocol/go-sdk` (recommended) or the more battle-tested community `mark3labs/mcp-go`?

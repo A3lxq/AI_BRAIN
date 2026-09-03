@@ -1,17 +1,17 @@
-# Research: Git Automation Library for AI_BRAIN
+# Research: Git Automation Library for ATHENA AI-BRAIN
 
 - **Research date:** 2026-08-24
-- **Researcher:** Claude Code (AI_BRAIN Phase 0)
+- **Researcher:** Claude Code (ATHENA AI-BRAIN Phase 0)
 - **Status:** Candidate evaluation — feeds ADR-0005 (Git automation library)
 - **Depends on:** ADR-0001 (Python runtime), ADR-0002 (Huey/SQLite job queue — Git operations likely run as background jobs)
 
 ## 1. Executive Summary
 
-Four approaches were evaluated: a raw `subprocess`/`asyncio.create_subprocess_exec` wrapper around the real `git` CLI, GitPython, pygit2 (libgit2 bindings), and Dulwich (pure Python). The standout, cross-cutting finding is that **neither "safer-seeming" library is actually injection-risk-free**: GitPython has an open, 2026-dated config-injection CVE (CVE-2026-42215) in exactly the risk category the security model warns against, and Dulwich — despite being pure Python — ships a `git_merge`-driver feature that itself internally calls `subprocess.run(..., shell=True)`, producing a real 2026 CVE (CVE-2026-42563, CVSS 8.8, CWE-78 OS Command Injection). GitPython's own maintainer has additionally declared the project in maintenance mode and called its design "deeply flawed and broken beyond repair" as of 2026. This reinforces that AI_BRAIN's own security-model rule — "never construct shell commands from untrusted text; prefer structured subprocess arguments" — is best enforced directly in AI_BRAIN's own auditable code against the real `git` binary, not delegated to a third-party abstraction assumed to have handled it.
+Four approaches were evaluated: a raw `subprocess`/`asyncio.create_subprocess_exec` wrapper around the real `git` CLI, GitPython, pygit2 (libgit2 bindings), and Dulwich (pure Python). The standout, cross-cutting finding is that **neither "safer-seeming" library is actually injection-risk-free**: GitPython has an open, 2026-dated config-injection CVE (CVE-2026-42215) in exactly the risk category the security model warns against, and Dulwich — despite being pure Python — ships a `git_merge`-driver feature that itself internally calls `subprocess.run(..., shell=True)`, producing a real 2026 CVE (CVE-2026-42563, CVSS 8.8, CWE-78 OS Command Injection). GitPython's own maintainer has additionally declared the project in maintenance mode and called its design "deeply flawed and broken beyond repair" as of 2026. This reinforces that ATHENA AI-BRAIN's own security-model rule — "never construct shell commands from untrusted text; prefer structured subprocess arguments" — is best enforced directly in ATHENA AI-BRAIN's own auditable code against the real `git` binary, not delegated to a third-party abstraction assumed to have handled it.
 
 ## 2. Problem Being Solved
 
-AI_BRAIN needs Git automation for the knowledge-vault backup/versioning workflow: status detection, safe commits with structured messages, configurable/safe push policies, rollback/recovery, conflict detection, dry-run preview, clear operation logging, and integration with a pre-commit secret scan — all while never constructing shell commands from untrusted text and never auto-triggering destructive operations (force-push, hard reset, history rewriting) without explicit user intent.
+ATHENA AI-BRAIN needs Git automation for the knowledge-vault backup/versioning workflow: status detection, safe commits with structured messages, configurable/safe push policies, rollback/recovery, conflict detection, dry-run preview, clear operation logging, and integration with a pre-commit secret scan — all while never constructing shell commands from untrusted text and never auto-triggering destructive operations (force-push, hard reset, history rewriting) without explicit user intent.
 
 ## 3. Technology Overview
 
@@ -35,29 +35,29 @@ Git itself remains the substrate regardless of approach. `subprocess`'s argument
 | Error handling clarity | Exit code + stderr text parsing — must be hand-built, no canonical wrapper library found | `GitCommandError` exceptions (nicer surface, wraps the same subprocess underneath) | Typed `GitError` exceptions | Python exceptions, less battle-tested at scale |
 | Maintenance status 2026 | N/A — git itself is very actively maintained | **Explicit maintainer-declared maintenance mode**; maintainer's own README calls the design "deeply flawed and broken beyond repair," points users to the Rust-based `gitoxide` | Actively maintained, healthy (183 open issues, regular commits) | Actively maintained, healthy, ongoing 2026 release cadence |
 
-## 6. AI_BRAIN Relevance
+## 6. ATHENA AI-BRAIN Relevance
 
-Since AI_BRAIN's vault is the user's personal knowledge base that they may also touch by hand with real `git` commands, **behavioral fidelity to real git matters more than convenience** — both pygit2 and Dulwich reimplement porcelain-level operations (merge, pull, conflict resolution) on lower-level primitives, creating a structural risk of divergence from what a human running `git` would experience, exactly in the operations (merge conflicts, pull) where correctness matters most for a backup workflow. Huey jobs (ADR-0002) already run off the event loop, so the async-native advantage of raw subprocess matters most for any Git status/diff checks invoked directly from AI_BRAIN's asyncio-side code (e.g., an MCP tool call checking vault status) rather than from dispatched jobs.
+Since ATHENA AI-BRAIN's vault is the user's personal knowledge base that they may also touch by hand with real `git` commands, **behavioral fidelity to real git matters more than convenience** — both pygit2 and Dulwich reimplement porcelain-level operations (merge, pull, conflict resolution) on lower-level primitives, creating a structural risk of divergence from what a human running `git` would experience, exactly in the operations (merge conflicts, pull) where correctness matters most for a backup workflow. Huey jobs (ADR-0002) already run off the event loop, so the async-native advantage of raw subprocess matters most for any Git status/diff checks invoked directly from ATHENA AI-BRAIN's asyncio-side code (e.g., an MCP tool call checking vault status) rather than from dispatched jobs.
 
 ## 7. Security
 
 This is the decisive section. The residual risk after ruling out shell injection (`shell=True`, already forbidden by the constitution) is argument injection (CWE-88) — a well-documented, actively-exploited CVE class (CVE-2025-48384 is on CISA's Known Exploited Vulnerabilities catalog). The `--` separator and `--end-of-options` (git ≥2.24) are the standard mitigations, with explicit allow-listing of branch/tag names as a necessary supplement since git doesn't forbid leading-dash ref names.
 
-Critically, **the two most obviously "safer" alternatives are not actually safer in practice**: GitPython's own current advisory (CVE-2026-42215) is a config-injection bug via unescaped newlines, and Dulwich's merge-driver feature contains a `shell=True` command-injection bug (CVE-2026-42563) that merging an untrusted branch can trigger. Both are patched in current versions, but the pattern is the more important finding than the specific bugs: an opaque dependency can silently reintroduce exactly the anti-pattern AI_BRAIN's security model forbids, in a way that's harder to audit than code AI_BRAIN writes and reviews itself. Neither Dulwich's Windows-only CVE (CVE-2026-42305) nor its receive-pack DoS CVE (CVE-2026-47734) are relevant to AI_BRAIN's single-user, Linux-only, client-side deployment.
+Critically, **the two most obviously "safer" alternatives are not actually safer in practice**: GitPython's own current advisory (CVE-2026-42215) is a config-injection bug via unescaped newlines, and Dulwich's merge-driver feature contains a `shell=True` command-injection bug (CVE-2026-42563) that merging an untrusted branch can trigger. Both are patched in current versions, but the pattern is the more important finding than the specific bugs: an opaque dependency can silently reintroduce exactly the anti-pattern ATHENA AI-BRAIN's security model forbids, in a way that's harder to audit than code ATHENA AI-BRAIN writes and reviews itself. Neither Dulwich's Windows-only CVE (CVE-2026-42305) nor its receive-pack DoS CVE (CVE-2026-47734) are relevant to ATHENA AI-BRAIN's single-user, Linux-only, client-side deployment.
 
 ## 8. Performance
 
-Not a meaningful differentiator at AI_BRAIN's single-user, single-machine scale — all four approaches operate on the same repository sizes and commit frequencies a personal knowledge vault would produce.
+Not a meaningful differentiator at ATHENA AI-BRAIN's single-user, single-machine scale — all four approaches operate on the same repository sizes and commit frequencies a personal knowledge vault would produce.
 
 ## 9. Operational Concerns
 
-- **Secret scanning**: the standard `pre-commit` framework with **gitleaks** (v8.30.1, feature-complete, actively security-patched, JSON output easy to parse from a subprocess call, no cloud account required) is the recommended primary scanner. **detect-secrets** (Yelp) is the only fully in-process, no-external-binary Python-native option, but its last tagged release was 2024-05-06 (~2 years stalled as of this research) — worth monitoring, not disqualifying. **ggshield** (GitGuardian) requires a cloud API key, a poor fit for AI_BRAIN's local-first, offline model, and is not recommended. **trufflehog** (actively developed, live credential verification reducing false positives) is a credible alternative to gitleaks.
+- **Secret scanning**: the standard `pre-commit` framework with **gitleaks** (v8.30.1, feature-complete, actively security-patched, JSON output easy to parse from a subprocess call, no cloud account required) is the recommended primary scanner. **detect-secrets** (Yelp) is the only fully in-process, no-external-binary Python-native option, but its last tagged release was 2024-05-06 (~2 years stalled as of this research) — worth monitoring, not disqualifying. **ggshield** (GitGuardian) requires a cloud API key, a poor fit for ATHENA AI-BRAIN's local-first, offline model, and is not recommended. **trufflehog** (actively developed, live credential verification reducing false positives) is a credible alternative to gitleaks.
 - **Hybrid pattern (library-for-reads + subprocess-for-writes)**: architecturally sound but rare in practice — the one real-world example found (Wayfair's `pygitops`) actually wraps GitPython for everything, not an instance of this specific split. If adopted at all, it should be scoped narrowly: subprocess for every mutating operation (commit, push, revert, reset, merge), with a library reserved only for pure inspection/logging conveniences — not as a load-bearing dependency for anything correctness depends on.
 - No canonical, well-maintained "safe git subprocess wrapper" library was found for Python — the failure-mode taxonomy (exit code + stderr text → merge conflict vs. auth failure vs. network failure vs. nothing-to-commit) appears to be commonly hand-rolled across projects, not solved by an off-the-shelf dependency.
 
 ## 10. Recommendation
 
-**Raw `subprocess`/`asyncio.create_subprocess_exec` wrapping the real `git` CLI directly**, as a purpose-built AI_BRAIN module — not a third-party Git library — for all operations, especially every mutating one (commit, push, revert, reset, merge):
+**Raw `subprocess`/`asyncio.create_subprocess_exec` wrapping the real `git` CLI directly**, as a purpose-built ATHENA AI-BRAIN module — not a third-party Git library — for all operations, especially every mutating one (commit, push, revert, reset, merge):
 
 - Argument lists only, `shell=True` never used.
 - `--` (universal) and `--end-of-options` (git ≥2.24, verify Kali's git version supports it per-subcommand) inserted before any pathspec/ref that could originate from untrusted or dynamic input.
@@ -66,7 +66,7 @@ Not a meaningful differentiator at AI_BRAIN's single-user, single-machine scale 
 - Dry-run via `git commit --dry-run`, `git push --dry-run`, and `git merge --no-commit --no-ff` where applicable; `git status --porcelain` + `git diff` as the general-purpose preview fallback.
 - `gitleaks` invoked via subprocess (JSON output) as a pre-commit secret scan, adopted through the standard `pre-commit` framework.
 
-**Dulwich in `--pure` mode is an optional, narrowly-scoped read-side convenience** (status/diff/log for logging or MCP status-tool purposes) — defensible only if AI_BRAIN commits to never touching its `ProcessMergeDriver`/custom-merge-driver surface. It should never become a load-bearing dependency for correctness-critical operations.
+**Dulwich in `--pure` mode is an optional, narrowly-scoped read-side convenience** (status/diff/log for logging or MCP status-tool purposes) — defensible only if ATHENA AI-BRAIN commits to never touching its `ProcessMergeDriver`/custom-merge-driver surface. It should never become a load-bearing dependency for correctness-critical operations.
 
 **GitPython is not recommended**: its own maintainer has declared it in maintenance mode and called its design "broken beyond repair" as of 2026, it carries an open, current, injection-class CVE, offers no async story, and every convenience it provides (revert, dry-run, conflict detection) bottoms out in raw passthrough to git anyway — it adds a dependency and a CVE surface without buying real abstraction value over a purpose-built subprocess wrapper.
 
@@ -86,6 +86,6 @@ Not a meaningful differentiator at AI_BRAIN's single-user, single-machine scale 
 
 ## 12. Open Questions
 
-- Should AI_BRAIN's subprocess wrapper live as a small standalone module now, or wait until the MCP tool contract design settles the exact operations it needs to expose (`enqueue_git_commit`, `get_git_status`, etc.)?
-- Does Kali's currently-installed git version support `--end-of-options` for every subcommand AI_BRAIN needs (`checkout`/`reset` only gained it in git 2.43.1)? Needs verification during Phase 1 setup.
+- Should ATHENA AI-BRAIN's subprocess wrapper live as a small standalone module now, or wait until the MCP tool contract design settles the exact operations it needs to expose (`enqueue_git_commit`, `get_git_status`, etc.)?
+- Does Kali's currently-installed git version support `--end-of-options` for every subcommand ATHENA AI-BRAIN needs (`checkout`/`reset` only gained it in git 2.43.1)? Needs verification during Phase 1 setup.
 - gitleaks vs. trufflehog as the primary pre-commit secret scanner — both are credible; low-stakes enough to decide at implementation time.

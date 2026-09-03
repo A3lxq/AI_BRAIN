@@ -6,7 +6,7 @@
 
 ## Objective
 
-Research and decide AI_BRAIN's RAG orchestration approach: structure-aware chunking, embeddings, hybrid retrieval + fusion + reranking, multi-LLM-provider abstraction, provenance/lineage, and duplicate detection — evaluating LangChain, LlamaIndex, a hand-rolled composable-primitives approach, and a middle-ground cherry-picking pattern.
+Research and decide ATHENA AI-BRAIN's RAG orchestration approach: structure-aware chunking, embeddings, hybrid retrieval + fusion + reranking, multi-LLM-provider abstraction, provenance/lineage, and duplicate detection — evaluating LangChain, LlamaIndex, a hand-rolled composable-primitives approach, and a middle-ground cherry-picking pattern.
 
 ## Completed Work
 
@@ -17,11 +17,11 @@ Research and decide AI_BRAIN's RAG orchestration approach: structure-aware chunk
 
 ## Key Decision
 
-AI_BRAIN's RAG pipeline will be built from **hand-rolled composable primitives**: `qdrant-client` (already decided) + `chonkie` (chunking) + SQLite FTS5 (keyword search) + a small hand-written cross-store fusion module + `sentence-transformers` (embeddings/reranking) + a small `Protocol`-based multi-provider LLM adapter + a provenance schema built against W3C PROV + duplicate detection via hash/MinHash-LSH/cosine similarity. No LangChain or LlamaIndex adoption.
+ATHENA AI-BRAIN's RAG pipeline will be built from **hand-rolled composable primitives**: `qdrant-client` (already decided) + `chonkie` (chunking) + SQLite FTS5 (keyword search) + a small hand-written cross-store fusion module + `sentence-transformers` (embeddings/reranking) + a small `Protocol`-based multi-provider LLM adapter + a provenance schema built against W3C PROV + duplicate detection via hash/MinHash-LSH/cosine similarity. No LangChain or LlamaIndex adoption.
 
 ## Key Findings
 
-- **LangChain has a disclosed CVE (CVE-2025-68664, CVSS 9.3)**: `dumps()`/`dumpd()` failed to escape attacker-controlled dicts, letting retrieved/tool-output data be deserialized as trusted framework objects — a real instance of the exact trust-boundary risk AI_BRAIN's security model targets.
+- **LangChain has a disclosed CVE (CVE-2025-68664, CVSS 9.3)**: `dumps()`/`dumpd()` failed to escape attacker-controlled dicts, letting retrieved/tool-output data be deserialized as trusted framework objects — a real instance of the exact trust-boundary risk ATHENA AI-BRAIN's security model targets.
 - **LlamaIndex's core carries a heavy dependency tree** (SQLAlchemy, NetworkX, NLTK, tiktoken) and a **global mutable `Settings` singleton**, flagged by its own community as a poor fit for concurrent systems — conflicts with the already-accepted asyncio/Huey concurrency model.
 - Every genuinely hard sub-problem (structure-aware chunking, hybrid fusion, reranking, lexical dedup) already has a mature, narrowly-scoped library — full framework adoption buys comparatively little.
 

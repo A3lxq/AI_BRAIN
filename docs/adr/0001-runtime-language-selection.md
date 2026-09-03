@@ -1,14 +1,14 @@
-# ADR-0001: Runtime Language/Stack Selection for AI_BRAIN
+# ADR-0001: Runtime Language/Stack Selection for ATHENA AI-BRAIN
 
 - **ID:** ADR-0001
-- **Title:** Runtime Language/Stack Selection for AI_BRAIN
+- **Title:** Runtime Language/Stack Selection for ATHENA AI-BRAIN
 - **Status:** Accepted
 - **Date proposed:** 2026-08-22
 - **Date accepted:** 2026-08-22
 
 ## Context
 
-`NEXT_SESSION.md` scoped the first Phase 0 research task as evaluating the programming language/runtime for AI_BRAIN, requiring comparison of at least Python, TypeScript/Node.js, Go, and Rust rather than assuming Python by default. Per `docs/RESEARCH_PROTOCOL.md`, each candidate was researched against 15 criteria (ecosystem, MCP support, AI/RAG ecosystem, filesystem/event tooling, SQLite support, vector database clients, async/concurrency model, type safety, performance, security, deployment, Linux/Kali compatibility, maintainability, developer productivity, long-term viability) using current primary documentation as of 2026-08-22.
+`NEXT_SESSION.md` scoped the first Phase 0 research task as evaluating the programming language/runtime for ATHENA AI-BRAIN, requiring comparison of at least Python, TypeScript/Node.js, Go, and Rust rather than assuming Python by default. Per `docs/RESEARCH_PROTOCOL.md`, each candidate was researched against 15 criteria (ecosystem, MCP support, AI/RAG ecosystem, filesystem/event tooling, SQLite support, vector database clients, async/concurrency model, type safety, performance, security, deployment, Linux/Kali compatibility, maintainability, developer productivity, long-term viability) using current primary documentation as of 2026-08-22.
 
 Full findings are recorded in:
 - [`docs/research/2026-08-22_runtime_python.md`](../research/2026-08-22_runtime_python.md)
@@ -21,7 +21,7 @@ Key finding that changed the shape of the decision: **all four candidates now ha
 
 ## Decision
 
-**Accepted:** Python is the primary implementation language/runtime for AI_BRAIN.
+**Accepted:** Python is the primary implementation language/runtime for ATHENA AI-BRAIN.
 
 The maintainer reviewed the research and comparison documents and accepted this ADR as proposed on 2026-08-22. Phase 1 (Foundation) implementation may now proceed on this basis, subject to the open sub-decisions listed under Consequences, each of which requires its own design doc before implementation per Constitution Article 2.
 
@@ -36,8 +36,8 @@ The maintainer reviewed the research and comparison documents and accepted this 
 ## Rationale
 
 1. **MCP support is now equivalent across all candidates** — an official SDK exists for each, removing this as a differentiator.
-2. **AI/RAG ecosystem depth is the criterion that matters most for this project's actual differentiated work.** AI_BRAIN's core engineering effort is iterative RAG-pipeline tuning (chunking strategy, embedding model choice, hybrid retrieval fusion, reranking), not primarily systems-level infrastructure work. Python has the deepest, most purpose-built ecosystem against every specifically named requirement in the master specification: `sentence-transformers` (embeddings + reranking), `chonkie` (semantic/structure-aware chunking), `qdrant-client` (official, sync+async), `litellm` (multi-provider LLM abstraction), `watchdog` (filesystem events), `python-frontmatter` (YAML frontmatter).
-3. **Python's known weaknesses land outside AI_BRAIN's actual workload shape.** The GIL's partial resolution (PEP 779, officially supported free-threading as of 3.14, ecosystem still catching up) and raw CPU-bound slowness matter far less for a system whose workload is dominated by I/O (filesystem watching, LLM API calls, vector DB queries, MCP transport) plus ML inference already delegated to native PyTorch/ONNX backends. This is a direct application of the constitution's "measure before optimizing" principle — the theoretical performance gap doesn't apply where the work actually happens.
+2. **AI/RAG ecosystem depth is the criterion that matters most for this project's actual differentiated work.** ATHENA AI-BRAIN's core engineering effort is iterative RAG-pipeline tuning (chunking strategy, embedding model choice, hybrid retrieval fusion, reranking), not primarily systems-level infrastructure work. Python has the deepest, most purpose-built ecosystem against every specifically named requirement in the master specification: `sentence-transformers` (embeddings + reranking), `chonkie` (semantic/structure-aware chunking), `qdrant-client` (official, sync+async), `litellm` (multi-provider LLM abstraction), `watchdog` (filesystem events), `python-frontmatter` (YAML frontmatter).
+3. **Python's known weaknesses land outside ATHENA AI-BRAIN's actual workload shape.** The GIL's partial resolution (PEP 779, officially supported free-threading as of 3.14, ecosystem still catching up) and raw CPU-bound slowness matter far less for a system whose workload is dominated by I/O (filesystem watching, LLM API calls, vector DB queries, MCP transport) plus ML inference already delegated to native PyTorch/ONNX backends. This is a direct application of the constitution's "measure before optimizing" principle — the theoretical performance gap doesn't apply where the work actually happens.
 4. **Python's security gaps are well-documented, mitigable through discipline, and process-covered by this project's own constitution.** Unsafe subprocess patterns, YAML/pickle deserialization traps, and the lack of in-language sandboxing are known, named risks with known, named mitigations (list-form `subprocess.run`, `yaml.safe_load`, OS-level isolation if untrusted-code execution is ever needed) — this project's mandatory threat-modeling step (Constitution Article 9, `docs/SECURITY_MODEL.md`) is designed to catch exactly this class of risk regardless of language.
 5. **Fit for a solo/small-team, teaching-oriented context.** CLAUDE.md establishes this project as a learning system built by one person with Claude Code. Rust's and Go's steeper AI/RAG integration costs (hand-rolled orchestration, thinner libraries, in Rust's case a real learning-curve tax) would slow the project's actual bottleneck — RAG quality iteration — more than Python's weaknesses would.
 

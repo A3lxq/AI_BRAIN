@@ -1,7 +1,7 @@
 # Design: Vault Safety Boundary (Path & Content Safety)
 
 - **Date:** 2026-08-27
-- **Author:** Claude Code (AI_BRAIN Phase 0)
+- **Author:** Claude Code (ATHENA AI-BRAIN Phase 0)
 - **Status:** Design — addresses `docs/SECURITY_MODEL.md` TB-3, P0 items #1 and #3
 - **Depends on / informs:** ADR-0004 (SQLite access layer), ADR-0005 (Git automation library), ADR-0007 (MCP tool contract), ADR-0009 (filesystem event architecture), `docs/DATA_MODEL.md` §0
 
@@ -160,11 +160,11 @@ None of these four is airtight alone; together they make reimplementation a visi
 - **`os` (stdlib).** `os.open(path, O_CREAT | O_EXCL | O_NOFOLLOW, …)` as the final-mile TOCTOU defense for CREATE-mode operations (see §5); `os.walk(vault_root, followlinks=False)` (or `Path.iterdir()` + explicit `is_symlink()` filtering) for the watcher's exclusion list and the reconciliation job's directory walk.
 - **`python-frontmatter`** (PyPI, `eyeseast/python-frontmatter`). **Verified directly against upstream source, not assumed:**
   - `frontmatter/default_handlers.py` (`main` branch) shows `YAMLHandler.load()` calling `yaml.load(fm, **kwargs)` with `kwargs.setdefault("Loader", SafeLoader)`, where `SafeLoader` is `CSafeLoader` if available, else PyYAML's `SafeLoader`. `YAMLHandler.export()` correspondingly defaults `Dumper` to `SafeDumper`/`CSafeDumper`.
-  - Both methods accept `**kwargs`, meaning a caller *can* override `Loader=yaml.Loader` (the unsafe loader) — this must never happen in AI_BRAIN code; enforced by the same grep-based CI check described in §3.3, extended to flag any `Loader=` kwarg passed into `frontmatter.load`/`frontmatter.loads` that isn't `SafeLoader`/`CSafeLoader`.
+  - Both methods accept `**kwargs`, meaning a caller *can* override `Loader=yaml.Loader` (the unsafe loader) — this must never happen in ATHENA AI-BRAIN code; enforced by the same grep-based CI check described in §3.3, extended to flag any `Loader=` kwarg passed into `frontmatter.load`/`frontmatter.loads` that isn't `SafeLoader`/`CSafeLoader`.
   - When no frontmatter delimiter is present, `frontmatter.loads()` returns a `Post` with empty metadata and the entire input as body — it does not raise. This is the mechanism `parse_note_safely` relies on for shapes (b)/(c) to fall through cleanly.
   - **Confirmed gap:** no size guard exists anywhere in this code path between splitting out the frontmatter block and handing it to `yaml.load`. This is why `parse_note_safely` adds its own `max_frontmatter_bytes` pre-check — it is an *additive* control, not a replacement for python-frontmatter, since no unsafe-loading problem was found.
   - **Sources:** [`frontmatter/default_handlers.py`](https://github.com/eyeseast/python-frontmatter/blob/main/frontmatter/default_handlers.py) and [`frontmatter/__init__.py`](https://raw.githubusercontent.com/eyeseast/python-frontmatter/main/frontmatter/__init__.py) on the `main` branch — **checked 2026-08-27**. Given how fast-moving supply-chain compromises have been in 2026 per `SECURITY_MODEL.md`'s own findings, this verification should be re-run (or added as a standing regression test, §7) on every version bump of `python-frontmatter`/`PyYAML`, not treated as a one-time fact.
-- **`PyYAML`** (transitive via python-frontmatter). AI_BRAIN code never calls it directly. If a future feature needs to parse YAML outside python-frontmatter, it must use `yaml.safe_load` exclusively — already `docs/TESTING_STRATEGY.md`'s stated grep-based CI check, cross-referenced here rather than duplicated.
+- **`PyYAML`** (transitive via python-frontmatter). ATHENA AI-BRAIN code never calls it directly. If a future feature needs to parse YAML outside python-frontmatter, it must use `yaml.safe_load` exclusively — already `docs/TESTING_STRATEGY.md`'s stated grep-based CI check, cross-referenced here rather than duplicated.
 - **`re` (stdlib)**, for the legacy `> From: <url>` extraction — a bounded, non-backtracking-prone pattern applied only after length-truncating the candidate line, which neutralizes ReDoS risk independent of pattern complexity.
 - **Alternative considered and rejected:** replacing `python-frontmatter` with a hand-rolled YAML-frontmatter splitter. Rejected — the verification above found no unsafe-loading defect in the current library; only an *additive* size-cap wrapper is warranted, not a replacement of an already-accepted ADR-0003 dependency.
 

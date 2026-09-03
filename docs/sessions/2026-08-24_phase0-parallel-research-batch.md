@@ -25,7 +25,7 @@ Given a stated time constraint, research the four remaining Phase 0 topics (Qdra
 
 ## Key Decisions
 
-1. **Qdrant deployment (ADR-0006)**: Docker server, bound to `127.0.0.1` only — not the embedded "local mode" client, which is a from-scratch reimplementation capped near AI_BRAIN's own scale with a documented hybrid-fusion parity bug.
+1. **Qdrant deployment (ADR-0006)**: Docker server, bound to `127.0.0.1` only — not the embedded "local mode" client, which is a from-scratch reimplementation capped near ATHENA AI-BRAIN's own scale with a documented hybrid-fusion parity bug.
 2. **MCP tool contract (ADR-0007)**: a full tool table covering every master-spec tool family; destructive operations (`note_delete`, `note_merge`) require Multi Round-Trip Request confirmation; genuinely irreversible Git operations are excluded from the MCP surface entirely.
 3. **Embeddings/sparse/reranker (ADR-0008)**: BGE-M3 (dense) + bge-reranker-v2-m3 (reranker) + Qdrant miniCOIL via `fastembed` (sparse), with Qwen3-Embedding-0.6B documented as a close fallback; decision is explicitly provisional-but-documented, to be re-evaluated in 6–12 months.
 4. **Filesystem event architecture (ADR-0009)**: light, non-semantic debouncing plus idempotent Huey jobs as the real reliability mechanism, with a periodic reconciliation/full-scan job as backstop for events the pipeline can't guarantee to catch.
@@ -33,7 +33,7 @@ Given a stated time constraint, research the four remaining Phase 0 topics (Qdra
 ## Key Findings Worth Carrying Forward
 
 - **MCP has no protocol-level defense against a client LLM conflating retrieved vault content with instructions.** Tool annotations are explicitly documented as informational only, not enforcement. This must be named as a residual risk in the security threat model, not treated as solved.
-- **Qdrant's embedded "local mode" is not a viable production deployment** — Qdrant's own docs frame it as dev/test/CI-only, and this research found a concrete, documented parity bug in exactly the hybrid-fusion feature AI_BRAIN already committed to (ADR-0003).
+- **Qdrant's embedded "local mode" is not a viable production deployment** — Qdrant's own docs frame it as dev/test/CI-only, and this research found a concrete, documented parity bug in exactly the hybrid-fusion feature ATHENA AI-BRAIN already committed to (ADR-0003).
 - **Filesystem event precision is fundamentally limited by inotify's own guarantees** (non-atomic move-pairing, cross-boundary move degradation) — the architecture deliberately biases toward over-triggering (cheap, absorbed by idempotent jobs) over under-triggering (silently stale index), matching the Testing Strategy's explicit tolerance for duplicate events.
 - **Embedding model choice in this space has a real shelf-life** — recorded as provisional-but-documented rather than permanent, consistent with "measure before optimizing" and "no silent architecture changes."
 

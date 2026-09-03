@@ -71,7 +71,7 @@ install/test/mypy/ruff itself before reporting)
    `RecursiveLevel.delimiters` match as literal substrings, not regex).
    **The design's flagged empirical question was resolved positively**: a
    hand-built ATX-heading-aware `RecursiveRules` correctly splits on
-   AI_BRAIN's real `# you asked`/`### USER`-style turn headers — no custom
+   ATHENA AI-BRAIN's real `# you asked`/`### USER`-style turn headers — no custom
    pre-splitter needed. Honestly documented one real limitation found:
    code fences longer than one chunk's worth of text are not protected from
    mid-fence splitting (chonkie has no fence-boundary awareness at all).

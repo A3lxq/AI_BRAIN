@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from uuid import uuid4
 
 from huey import SqliteHuey, crontab
@@ -32,6 +33,13 @@ from ai_brain.hardening.permissions import ensure_private_dir
 from ai_brain.hardening.serializer import SerializerMisconfigured, assert_safe_job_serializer
 from ai_brain.indexing.index_note import IndexBootstrapSummary, index_bootstrap, index_note
 from ai_brain.indexing.qdrant_store import ensure_collection
+from ai_brain.retrieval.evaluation import (
+    DEFAULT_CORPUS_DIR,
+    EvaluationReport,
+    load_corpus,
+    run_evaluation,
+)
+from ai_brain.retrieval.search import search_ranked_note_paths
 from ai_brain.safety.paths import VaultRoot
 from ai_brain.vault.bootstrap import BootstrapSummary, bootstrap_ingest_vault
 from ai_brain.vault.ingest import ingest_note
@@ -257,6 +265,29 @@ def run_reconcile(config: AIBrainConfig | None = None) -> ReconciliationSummary:
                 block_on_high_confidence_secrets=active_config.secret_scanner_block_on_high_confidence,
                 qdrant_client=qdrant_client,
             )
+
+    return asyncio.run(_run())
+
+
+def run_retrieval_evaluate(
+    config: AIBrainConfig | None = None, *, corpus_dir: Path | None = None
+) -> EvaluationReport:
+    """Synchronous entry point for `ai-brain retrieval evaluate`. Uses a
+    plain, unvalidated `QdrantClient` (not `_get_qdrant_client`'s eager
+    `ensure_collection` check) -- if Qdrant is unreachable, `search()`'s own
+    per-query degradation (keyword-only fusion) kicks in for each question
+    rather than failing the whole command up front."""
+    active_config = config or _config
+    qdrant_client = QdrantClient(url=active_config.qdrant_url)
+    corpus = load_corpus(corpus_dir or DEFAULT_CORPUS_DIR)
+
+    async def _run() -> EvaluationReport:
+        async with open_connection(active_config.db_path) as conn:
+
+            async def search_fn(query_text: str) -> list[str]:
+                return await search_ranked_note_paths(conn, qdrant_client, query_text)
+
+            return await run_evaluation(corpus, search_fn)
 
     return asyncio.run(_run())
 

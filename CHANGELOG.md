@@ -60,7 +60,7 @@
 - Test suite: 211 tests total (124 new this session) — all passing; mypy --strict clean; ruff clean. Live end-to-end CLI verification performed against a 3-note fixture vault covering all three real content shapes.
 - Phase 2 work committed and pushed to `github.com/A3lxq/AI_BRAIN` `main` (`aa76ce7`).
 - `docs/design/indexing-pipeline.md`: design for chunking, embedding, Qdrant store, and the `index_note` job (ADR-0003/0006/0008), including a critical `sentence-transformers` CVE (CVE-2026-68770) found during research and resolved by direct GitHub source verification against the exact pre-fix and post-fix versions.
-- `ai_brain.indexing.chunking`: structure-aware Markdown chunking via `chonkie`, hand-built heading-aware rules (never `from_recipe()`, which makes a live network call). Empirically confirmed to split on AI_BRAIN's real conversational-turn headers.
+- `ai_brain.indexing.chunking`: structure-aware Markdown chunking via `chonkie`, hand-built heading-aware rules (never `from_recipe()`, which makes a live network call). Empirically confirmed to split on ATHENA AI-BRAIN's real conversational-turn headers.
 - `ai_brain.indexing.embedding`: dense (`BAAI/bge-m3`, revision-pinned) and sparse (`Qdrant/minicoil-v1` via `fastembed`, no pinning mechanism exists — documented gap) embedding generation.
 - `ai_brain.indexing.qdrant_store`: collection/alias lifecycle (atomic, lock-guarded alias mutation — resolves `SECURITY_MODEL.md` P1 item 11), point upsert/delete, payload indexes.
 - `ai_brain.indexing.index_note`: the idempotent per-note indexing job, chained after `ingest_note()`'s success; embeds and upserts to Qdrant before any SQLite `chunks` row is written, guaranteeing zero partial rows on failure.
@@ -68,12 +68,26 @@
 - `ai_brain.worker`/`ai_brain.vault.bootstrap`/`ai_brain.vault.reconcile`: wired to chain indexing after ingestion, with graceful degradation to metadata-only ingestion when Qdrant is unreachable.
 - CLI: `ai-brain index bootstrap`; `ai-brain doctor` gained a `qdrant_reachable` check.
 - Test suite: 241 tests total (30 new this session, 4 correctly `skip`-marked pending Docker/Qdrant access in this environment) — all passing; mypy --strict clean; ruff clean. Live end-to-end CLI verification performed, including confirming graceful degradation when Qdrant is unreachable.
+- Phase 3 work committed and pushed to `github.com/A3lxq/AI_BRAIN` `main` (`561f8d4`).
+- `docs/design/retrieval-pipeline.md`: design for hybrid search, cross-store fusion, reranking, context construction, and the retrieval evaluation suite (ADR-0003/0006/0008), including a real Qdrant embedded-mode filter bug found during research and a corrected FTS5 phrase-concatenation assumption.
+- `ai_brain.retrieval.keyword_search`: SQLite FTS5 keyword search with `sanitize_fts5_query`, closing `SECURITY_MODEL.md` P1 item 10 (TB-7, FTS5 query-syntax injection) for the first time.
+- `ai_brain.retrieval.vector_search`: Qdrant hybrid dense+sparse query construction (RRF `FusionQuery`), filter applied defensively on every `Prefetch`.
+- `ai_brain.retrieval.fusion`: hand-written three-way Reciprocal Rank Fusion (vector + chunk-keyword + note-title, `k=60`).
+- `ai_brain.retrieval.reranking`: `BAAI/bge-reranker-v2-m3` cross-encoder reranking, revision-pinned; found and worked around a real `CrossEncoder` API-drift (`activation_fn`, not the older `default_activation_function`).
+- `ai_brain.retrieval.context`: token-budgeted greedy context assembly with per-chunk citations, never truncating a chunk mid-text.
+- `ai_brain.retrieval.evaluation`: Recall@K/Precision@K (K=3,5,10)/MRR/nDCG@10/latency-percentile evaluation harness, plus a distinct unanswerable-question false-positive-rate metric; ships with a 10-note/17-question starter corpus (`tests/retrieval/fixtures/eval_corpus/`).
+- `ai_brain.retrieval.search`: the retrieval orchestrator, degrading to keyword-only fusion (not propagating the exception) when Qdrant is unreachable at query time.
+- `ai_brain.db.repository.chunks`: extended with `get_by_ids`/`get_first_chunk_id_for_note`.
+- CLI: `ai-brain retrieval evaluate [--corpus PATH]`.
+- Test suite: 296 tests total (55 new this session, 5 correctly `skip`-marked pending Docker/Qdrant access) — all passing; mypy --strict clean; ruff clean. Live end-to-end CLI verification against the real eval corpus (Qdrant unreachable throughout) confirmed and documented a real architectural finding: keyword-only degradation currently returns zero results, not degraded ones, when no note has ever been successfully indexed (`docs/design/retrieval-pipeline.md` §8) — a composition of two individually-correct, already-tested mechanisms, flagged for a future phase/addendum ADR rather than silently patched.
 
 ### Not yet implemented
 - Status promotion from `draft` to `active` (no mechanism decided yet)
 - `watchdog` supply-chain review (flagged as required, not yet performed)
 - `fastembed`/miniCOIL revision pinning (no mechanism exists upstream)
 - `ai_brain.mcp_server` (MCP server entry point)
-- Retrieval engine (hybrid fusion, reranking, context construction)
+- The zero-results-on-full-degradation gap in Phase 4's keyword-only fallback (`docs/design/retrieval-pipeline.md` §8) — a real design decision deferred to a future phase, not fixed in this pass
+- Regression-gating threshold for `ai-brain retrieval evaluate` (currently always exits 0)
+- Retrieval-evaluation corpus scale-up to `TESTING_STRATEGY.md`'s 30-60 note target (currently 10 notes/17 questions)
 - Event engine
 - Git automation module

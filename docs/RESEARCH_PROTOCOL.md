@@ -1,4 +1,4 @@
-# AI_BRAIN — Technology Research Protocol
+# ATHENA AI-BRAIN — Technology Research Protocol
 
 Research is a formal engineering activity.
 
@@ -11,7 +11,7 @@ Research is a formal engineering activity.
 5. Evaluate Linux/Kali compatibility.
 6. Evaluate security.
 7. Evaluate maintainability.
-8. Evaluate integration with AI_BRAIN.
+8. Evaluate integration with ATHENA AI-BRAIN.
 9. Prototype only when necessary.
 10. Compare results.
 11. Recommend one option.

@@ -1,7 +1,7 @@
-# Research: Rust as AI_BRAIN Runtime
+# Research: Rust as ATHENA AI-BRAIN Runtime
 
 - **Research date:** 2026-08-22
-- **Researcher:** Claude Code (AI_BRAIN Phase 0)
+- **Researcher:** Claude Code (ATHENA AI-BRAIN Phase 0)
 - **Status:** Candidate evaluation — feeds ADR-0001 (language/runtime selection)
 
 ## 1. Executive Summary
@@ -10,7 +10,7 @@ Rust offers the strongest security/correctness profile of the four candidates: a
 
 ## 2. Problem Being Solved
 
-AI_BRAIN needs one runtime for: vault filesystem watching, Markdown/YAML parsing, structure-aware chunking, embeddings, hybrid retrieval (vector + keyword + metadata + reranking), SQLite metadata storage, a Qdrant vector store client, one unified MCP server decoupled from business logic, multi-LLM-provider abstraction, and safe Git automation — running local-first on Linux (Kali), with strong async/event-driven job handling and a security posture that treats retrieved content as untrusted.
+ATHENA AI-BRAIN needs one runtime for: vault filesystem watching, Markdown/YAML parsing, structure-aware chunking, embeddings, hybrid retrieval (vector + keyword + metadata + reranking), SQLite metadata storage, a Qdrant vector store client, one unified MCP server decoupled from business logic, multi-LLM-provider abstraction, and safe Git automation — running local-first on Linux (Kali), with strong async/event-driven job handling and a security posture that treats retrieved content as untrusted.
 
 ## 3. Technology Overview
 
@@ -18,7 +18,7 @@ Rust is a compiled, memory-safe-without-garbage-collection systems language on a
 
 ## 4. Architecture Fit
 
-- **tokio** (899.5M+ downloads) is the dominant async runtime and fits AI_BRAIN's event-driven job architecture naturally: tasks + channels (mpsc/broadcast) map directly onto "watch vault → enqueue indexing job → process asynchronously without blocking handlers."
+- **tokio** (899.5M+ downloads) is the dominant async runtime and fits ATHENA AI-BRAIN's event-driven job architecture naturally: tasks + channels (mpsc/broadcast) map directly onto "watch vault → enqueue indexing job → process asynchronously without blocking handlers."
 - **Multi-provider LLM abstraction caveat**: native `async fn` in traits (stable since 1.75) is not `dyn`-compatible, so a runtime-selectable `Box<dyn LlmProvider>` abstraction still needs the `async-trait` crate (dtolnay, well-maintained) — a known wrinkle to plan for explicitly, not a blocker.
 - **notify** crate is best-in-class for filesystem events (142M downloads, used by rust-analyzer, deno, watchexec, mdBook), pairs naturally with tokio via a channel bridge.
 - **SQLite + FTS5**: `rusqlite` gives direct access to SQLite's FTS5 (useful for the keyword/full-text leg of hybrid retrieval) at the cost of needing `spawn_blocking` for async integration; `sqlx` is async-native with compile-time-checked queries but one abstraction layer removed from raw SQLite features.
@@ -39,17 +39,17 @@ Evaluated in parallel: Python, TypeScript/Node.js, Go (see sibling research docs
 | 6 | Vector DB clients | `qdrant-client` — **official**, maintained by the Qdrant team itself (Qdrant is written in Rust), v1.19.0, gRPC via tonic. Arguably the single best-supported piece of the whole Rust AI/RAG stack. |
 | 7 | Async/concurrency | tokio is dominant and mature. Async Rust (Send/Sync bounds, pinning, lifetime interaction) is widely regarded as one of the harder parts of the language even for otherwise-comfortable Rust engineers. |
 | 8 | Type safety | Ownership/borrow-checker gives compile-time guarantees against data races and use-after-free/double-free without a GC — the strongest static-safety guarantee of the four candidates. Productivity tradeoff is real and self-reported (official survey: compile time/resource use as top pain point). |
-| 9 | Performance | Compiled, no GC, generally fastest of the four candidates for both I/O-bound (tokio, zero-cost futures) and CPU-bound (chunking, hashing) work. No AI_BRAIN-specific benchmark exists — claims should be validated against the actual workload, not assumed. |
-| 10 | Security | **Memory safety is the standout differentiator** — memory-safety bugs require explicit `unsafe` code, which AI_BRAIN's codebase would need essentially none of. `Command`'s argument-array API structurally avoids shell-injection classes of bugs. `git2-rs` (official `rust-lang` org, libgit2 bindings, "threadsafe and memory safe") avoids subprocess/shell risk for most Git operations. `cargo audit` + `cargo-deny` are mature, CI-friendly supply-chain tools. |
+| 9 | Performance | Compiled, no GC, generally fastest of the four candidates for both I/O-bound (tokio, zero-cost futures) and CPU-bound (chunking, hashing) work. No ATHENA AI-BRAIN-specific benchmark exists — claims should be validated against the actual workload, not assumed. |
+| 10 | Security | **Memory safety is the standout differentiator** — memory-safety bugs require explicit `unsafe` code, which ATHENA AI-BRAIN's codebase would need essentially none of. `Command`'s argument-array API structurally avoids shell-injection classes of bugs. `git2-rs` (official `rust-lang` org, libgit2 bindings, "threadsafe and memory safe") avoids subprocess/shell risk for most Git operations. `cargo audit` + `cargo-deny` are mature, CI-friendly supply-chain tools. |
 | 11 | Deployment | Single static-ish binary; musl target gives fully static binaries with no glibc dependency. musl+scratch containers ~8MB, distroless ~29MB (both viable; distroless is more defensible for a security-conscious project). Cross-compilation via `cross` (Docker/Podman-based) — more setup than Go's near-zero-config story, but well-documented. |
 | 12 | Linux/Kali compatibility | Kali's packaged `rustc` lags upstream (typical distro lag) — standard practice is to use `rustup`-managed toolchains instead of the distro package, not Kali-specific. Notable signal: Debian is reportedly introducing hard Rust dependencies into APT itself (2026), indicating deep entrenchment in the Debian/Kali base. No Rust-specific compatibility issues found. |
 | 13 | Maintainability | Strong type system + exhaustive pattern matching + `Result`-based error handling resist "silent failure"/forgotten-error-case bugs — favorable for long-term codebase health. Cognitive overhead (borrow checker, lifetimes, owned/borrowed data split) is real and non-trivial, especially early — a genuine consideration for a solo/small-team project. |
-| 14 | Developer productivity | Compile times remain the #1 self-reported pain point even in the July 2026 compiler-performance report, though improving. `rust-analyzer` offsets some friction with strong inline feedback. Honest assessment: expect **slower initial development velocity** than Python for AI_BRAIN's RAG-pipeline-experimentation phases, and more integration work wiring fastembed/candle/rig-core/qdrant-client/rmcp together than an equivalent Python stack would need. |
+| 14 | Developer productivity | Compile times remain the #1 self-reported pain point even in the July 2026 compiler-performance report, though improving. `rust-analyzer` offsets some friction with strong inline feedback. Honest assessment: expect **slower initial development velocity** than Python for ATHENA AI-BRAIN's RAG-pipeline-experimentation phases, and more integration work wiring fastembed/candle/rig-core/qdrant-client/rmcp together than an equivalent Python stack would need. |
 | 15 | Long-term viability | Rust Foundation's 2026–2028 strategic plan, TUF-based supply-chain signing rollout starting 2026, Foundation joining WG21 (C++ standards committee) — signals of institutional maturity. Linux kernel's ongoing Rust adoption and Debian's planned hard APT dependency are strong systems-level adoption signals. No viability red flags. |
 
-## 7. AI_BRAIN Relevance
+## 7. ATHENA AI-BRAIN Relevance
 
-The official `rmcp` SDK and first-party Qdrant client are the strongest fit of any candidate for two of AI_BRAIN's most architecturally central requirements. Memory safety plus `Command`'s array-based API plus `git2-rs` directly de-risk the two features the master specification explicitly calls out as security-sensitive (subprocess/Git automation, untrusted-content handling). The tradeoff is squarely in AI/RAG ecosystem depth and developer velocity: Rust's building blocks (chunking, local embeddings, reranking, an emerging agent framework) all exist and work, but with materially thinner documentation, smaller communities, and more integration work than Python's equivalents.
+The official `rmcp` SDK and first-party Qdrant client are the strongest fit of any candidate for two of ATHENA AI-BRAIN's most architecturally central requirements. Memory safety plus `Command`'s array-based API plus `git2-rs` directly de-risk the two features the master specification explicitly calls out as security-sensitive (subprocess/Git automation, untrusted-content handling). The tradeoff is squarely in AI/RAG ecosystem depth and developer velocity: Rust's building blocks (chunking, local embeddings, reranking, an emerging agent framework) all exist and work, but with materially thinner documentation, smaller communities, and more integration work than Python's equivalents.
 
 ## 8. Security
 
@@ -57,18 +57,18 @@ This is Rust's clearest advantage. Memory-safety guarantees eliminate an entire 
 
 ## 9. Performance
 
-Expected to be the fastest of the four candidates for both I/O-bound and CPU-bound work, but this is not backed by an AI_BRAIN-specific benchmark — should be validated against the actual chunking/embedding workload before being treated as a decisive factor, per the constitution's "measure before optimizing" rule.
+Expected to be the fastest of the four candidates for both I/O-bound and CPU-bound work, but this is not backed by an ATHENA AI-BRAIN-specific benchmark — should be validated against the actual chunking/embedding workload before being treated as a decisive factor, per the constitution's "measure before optimizing" rule.
 
 ## 10. Operational Concerns
 
 - Compile times will materially shape day-to-day iteration speed on a binary linking tokio + rmcp + qdrant-client + ONNX runtime bindings — a real, not hypothetical, cost.
 - The `async-trait` crate is a required (not optional) dependency for the multi-provider LLM abstraction, given `dyn`-incompatibility of native async traits.
 - Distro-packaged `rustc` on Kali lags upstream; standardize on `rustup` toolchains.
-- No independently-verified AI_BRAIN-specific performance benchmark exists yet.
+- No independently-verified ATHENA AI-BRAIN-specific performance benchmark exists yet.
 
 ## 11. Recommendation (per-candidate verdict, not final cross-language decision)
 
-Rust scores highest on security/correctness guarantees and has surprisingly strong first-party support for AI_BRAIN's two most architecturally central pieces (MCP, Qdrant), but carries the steepest learning curve and thinnest AI/RAG ecosystem of the four candidates — a genuine velocity tax for a solo/small-team maintainer building a project whose differentiated value includes RAG-pipeline experimentation. Final cross-candidate recommendation is deferred to the comparison matrix and ADR-0001.
+Rust scores highest on security/correctness guarantees and has surprisingly strong first-party support for ATHENA AI-BRAIN's two most architecturally central pieces (MCP, Qdrant), but carries the steepest learning curve and thinnest AI/RAG ecosystem of the four candidates — a genuine velocity tax for a solo/small-team maintainer building a project whose differentiated value includes RAG-pipeline experimentation. Final cross-candidate recommendation is deferred to the comparison matrix and ADR-0001.
 
 ## 12. References
 
@@ -95,7 +95,7 @@ Rust scores highest on security/correctness guarantees and has surprisingly stro
 
 ## 13. Open Questions
 
-- Should AI_BRAIN accept the compile-time/iteration-speed cost given the project's RAG-pipeline-experimentation needs, or is that mitigated by a stable, fixed hybrid-retrieval design decided early?
+- Should ATHENA AI-BRAIN accept the compile-time/iteration-speed cost given the project's RAG-pipeline-experimentation needs, or is that mitigated by a stable, fixed hybrid-retrieval design decided early?
 - `rusqlite` (direct FTS5 access, sync+spawn_blocking) vs `sqlx` (async-native, compile-time-checked queries) for the metadata/state store?
-- Is `rig-core`'s early-stage maturity acceptable as an agent-framework dependency, or should AI_BRAIN hand-roll orchestration directly on `rmcp`+`qdrant-client`+`fastembed`?
-- What is the actual measured performance delta on AI_BRAIN's real chunking/embedding workload, once a prototype exists?
+- Is `rig-core`'s early-stage maturity acceptable as an agent-framework dependency, or should ATHENA AI-BRAIN hand-roll orchestration directly on `rmcp`+`qdrant-client`+`fastembed`?
+- What is the actual measured performance delta on ATHENA AI-BRAIN's real chunking/embedding workload, once a prototype exists?

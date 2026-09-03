@@ -1,0 +1,93 @@
+[
+  {
+    "id": "q01",
+    "text": "How do I create a Python virtual environment?",
+    "judgments": [{"note_path": "CHAT_GPT/python_venv.md", "grade": 2}]
+  },
+  {
+    "id": "q02",
+    "text": "What is a binary search tree?",
+    "judgments": [{"note_path": "CHAT_GPT/binary_search_trees.md", "grade": 2}]
+  },
+  {
+    "id": "q03",
+    "text": "What data structure lets you find an item in logarithmic time by repeatedly comparing against a root node and descending left or right?",
+    "judgments": [{"note_path": "CHAT_GPT/binary_search_trees.md", "grade": 2}]
+  },
+  {
+    "id": "q04",
+    "text": "What HTTP methods does a RESTful API use?",
+    "judgments": [{"note_path": "CHAT_GPT/rest_apis.md", "grade": 2}]
+  },
+  {
+    "id": "q05",
+    "text": "What is the difference between git merge and git rebase?",
+    "judgments": [{"note_path": "CHAT_GPT/git_basics.md", "grade": 2}]
+  },
+  {
+    "id": "q06",
+    "text": "How does a hash table achieve O(1) lookup?",
+    "judgments": [{"note_path": "QWEN/hash_tables.md", "grade": 2}]
+  },
+  {
+    "id": "q07",
+    "text": "How are hash collisions handled?",
+    "judgments": [{"note_path": "QWEN/hash_tables.md", "grade": 2}]
+  },
+  {
+    "id": "q08",
+    "text": "Compare quicksort and mergesort.",
+    "judgments": [{"note_path": "QWEN/sorting_algorithms.md", "grade": 2}]
+  },
+  {
+    "id": "q09",
+    "text": "Why does every recursive function need a base case?",
+    "judgments": [{"note_path": "QWEN/recursion.md", "grade": 2}]
+  },
+  {
+    "id": "q10",
+    "text": "What do injection attacks and cross-site scripting have in common as web application vulnerabilities involving untrusted data?",
+    "judgments": [
+      {"note_path": "OWASP/injection.md", "grade": 2},
+      {"note_path": "OWASP/xss.md", "grade": 2}
+    ]
+  },
+  {
+    "id": "q11",
+    "text": "How do you prevent SQL injection?",
+    "judgments": [{"note_path": "OWASP/injection.md", "grade": 2}]
+  },
+  {
+    "id": "q12",
+    "text": "What is the difference between stored and reflected cross-site scripting?",
+    "judgments": [{"note_path": "OWASP/xss.md", "grade": 2}]
+  },
+  {
+    "id": "q13",
+    "text": "What causes broken authentication vulnerabilities and how are they mitigated?",
+    "judgments": [{"note_path": "OWASP/broken_authentication.md", "grade": 2}]
+  },
+  {
+    "id": "q14",
+    "text": "What algorithms discussed have a worst-case time complexity of O(n squared) or degrade badly on certain inputs?",
+    "judgments": [
+      {"note_path": "QWEN/sorting_algorithms.md", "grade": 2},
+      {"note_path": "QWEN/hash_tables.md", "grade": 1}
+    ]
+  },
+  {
+    "id": "q15",
+    "text": "What is the time complexity of Dijkstra's shortest path algorithm?",
+    "judgments": []
+  },
+  {
+    "id": "q16",
+    "text": "How do I configure a Kubernetes ingress controller with TLS termination?",
+    "judgments": []
+  },
+  {
+    "id": "q17",
+    "text": "What year was the Python programming language first released?",
+    "judgments": []
+  }
+]

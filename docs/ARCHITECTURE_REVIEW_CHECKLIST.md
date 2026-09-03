@@ -1,4 +1,4 @@
-# AI_BRAIN — Architecture Review Checklist
+# ATHENA AI-BRAIN — Architecture Review Checklist
 
 Before accepting a subsystem:
 

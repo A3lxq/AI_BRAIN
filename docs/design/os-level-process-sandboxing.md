@@ -1,7 +1,7 @@
 # Design: OS-Level Process Sandboxing (systemd/bubblewrap hardening backstop)
 
 - **Date:** 2026-08-27
-- **Author:** Claude Code (AI_BRAIN Phase 0)
+- **Author:** Claude Code (ATHENA AI-BRAIN Phase 0)
 - **Status:** Design — addresses `docs/SECURITY_MODEL.md` P1 remediation item #9 / TB-3 finding "No OS-level backstop exists"
 - **Depends on / informed by:** ADR-0001 (Python/Kali), ADR-0002 (Huey job queue), ADR-0005 (Git automation, subprocess model), ADR-0006 (Qdrant Docker, 127.0.0.1), ADR-0007 (MCP tool contract, transport undecided — stdio recommended)
 - **Non-goal:** This document does not decide MCP transport (a separate P1 item/ADR). It assumes stdio-only for Phase 1, per `docs/SECURITY_MODEL.md`'s recommendation, and designs for that case explicitly.
@@ -11,9 +11,9 @@
 
 ### What this hardening layer is for
 
-`docs/SECURITY_MODEL.md` TB-3 names the single largest structural gap in AI_BRAIN's Phase 0 design: the path-traversal defense (canonicalize vault root, `Path.resolve(strict=True)` + ancestor check — designed in `docs/design/vault-safety-boundary.md`) is **100% application-level Python logic**. If that logic has a bug — and CWE-22/CWE-59 bugs recur even in mature, reviewed software — there is currently nothing between a buggy `note_create`/`note_move`/`research_commit` call and the full read/write privilege of whichever Kali user account launched AI_BRAIN: SSH keys, browser profiles, shell history, everything in `$HOME`.
+`docs/SECURITY_MODEL.md` TB-3 names the single largest structural gap in ATHENA AI-BRAIN's Phase 0 design: the path-traversal defense (canonicalize vault root, `Path.resolve(strict=True)` + ancestor check — designed in `docs/design/vault-safety-boundary.md`) is **100% application-level Python logic**. If that logic has a bug — and CWE-22/CWE-59 bugs recur even in mature, reviewed software — there is currently nothing between a buggy `note_create`/`note_move`/`research_commit` call and the full read/write privilege of whichever Kali user account launched ATHENA AI-BRAIN: SSH keys, browser profiles, shell history, everything in `$HOME`.
 
-This design adds an OS-enforced containment boundary around AI_BRAIN's own processes (MCP server, Huey worker) so that **even if the path-canonicalization logic is wrong, the OS refuses the resulting filesystem operation.**
+This design adds an OS-enforced containment boundary around ATHENA AI-BRAIN's own processes (MCP server, Huey worker) so that **even if the path-canonicalization logic is wrong, the OS refuses the resulting filesystem operation.**
 
 ### What this explicitly does NOT protect against
 
@@ -31,7 +31,7 @@ This is explicitly "what happens if the path-canonicalization fix has a bug," no
 
 ### The tension, stated precisely
 
-- **ADR-0007** leaves MCP transport undecided but `docs/SECURITY_MODEL.md` P1 item #7 recommends **stdio-only for Phase 1**. Under stdio transport, AI_BRAIN's MCP server process is **spawned as a child process of the MCP client itself** — never started by systemd. Systemd unit hardening is architecturally inapplicable to a process whose parent is the MCP client, not `systemd --user`/PID 1.
+- **ADR-0007** leaves MCP transport undecided but `docs/SECURITY_MODEL.md` P1 item #7 recommends **stdio-only for Phase 1**. Under stdio transport, ATHENA AI-BRAIN's MCP server process is **spawned as a child process of the MCP client itself** — never started by systemd. Systemd unit hardening is architecturally inapplicable to a process whose parent is the MCP client, not `systemd --user`/PID 1.
 - **The Huey worker**, by contrast, is not spawned per-request by an MCP client. Per ADR-0002/ADR-0009, it needs to run independently and continuously — a genuine "long-running background daemon," exactly what systemd is designed for.
 
 So the two processes ADR-0002 and ADR-0007 already establish as separate have **structurally different lifecycles**, and that difference should drive the sandboxing mechanism, not be smoothed over by forcing both into one deployment model.
@@ -47,7 +47,7 @@ This is not a compromise:
 
 - Forcing the MCP server into a systemd unit would mean the MCP client can no longer directly manage the process it thinks it's spawning (stdout/stdin framing for the MCP protocol would have to be proxied through `systemctl`) — this doesn't match ADR-0007's transport model.
 - Forgoing sandboxing of the MCP server because "it's usually launched by hand" would leave the *higher-traffic, directly LLM-facing* process completely unhardened, precisely backwards given TB-2/TB-3 both name it as the highest-exposure component.
-- The bubblewrap approach is not exotic for this use case — a directly relevant 2026 write-up ("Sandboxing the Claude Code CLI on Linux," esokia labs) documents this identical pattern: wrapping an LLM-agent-adjacent CLI tool, launched as a plain subprocess (not via systemd), in a `bwrap` layer that mounts `$HOME` read-only, bind-mounts one writable project directory, and lets child-process execution (git) work transparently since `bwrap` operates via namespaces at the process tree's root, which fork/exec-descend automatically — the same mechanism this design relies on for AI_BRAIN's `git`/`gitleaks` subprocesses (§4).
+- The bubblewrap approach is not exotic for this use case — a directly relevant 2026 write-up ("Sandboxing the Claude Code CLI on Linux," esokia labs) documents this identical pattern: wrapping an LLM-agent-adjacent CLI tool, launched as a plain subprocess (not via systemd), in a `bwrap` layer that mounts `$HOME` read-only, bind-mounts one writable project directory, and lets child-process execution (git) work transparently since `bwrap` operates via namespaces at the process tree's root, which fork/exec-descend automatically — the same mechanism this design relies on for ATHENA AI-BRAIN's `git`/`gitleaks` subprocesses (§4).
 
 ### If MCP transport ever moves to HTTP (out of scope, flagged for the future)
 
@@ -56,8 +56,8 @@ If a future ADR reverses the stdio recommendation and adds HTTP transport, the M
 ### System unit vs. user unit for the Huey worker
 
 Recommend **`systemd --user`**, not a system-level unit, because:
-- AI_BRAIN's entire footprint (vault, SQLite files, model cache) already lives under the interactively-logged-in user's own account — no privilege-separation reason to run as a distinct system service.
-- A user unit starts/stops naturally with the user's login session, matching how a solo-developer Kali workstation is actually used (CLAUDE.md's own framing: "a learning system built by one person"). If AI_BRAIN needs to keep running after logout, `loginctl enable-linger <user>` is the documented mechanism — an operational choice, not a blocker.
+- ATHENA AI-BRAIN's entire footprint (vault, SQLite files, model cache) already lives under the interactively-logged-in user's own account — no privilege-separation reason to run as a distinct system service.
+- A user unit starts/stops naturally with the user's login session, matching how a solo-developer Kali workstation is actually used (CLAUDE.md's own framing: "a learning system built by one person"). If ATHENA AI-BRAIN needs to keep running after logout, `loginctl enable-linger <user>` is the documented mechanism — an operational choice, not a blocker.
 
 ## 3. Concrete Unit File Design(s)
 
@@ -67,15 +67,15 @@ This is a deliberate, reasoned deviation from the threat model's literal remedia
 
 `DynamicUser=yes` allocates a throwaway UID at service start and releases it at stop. It automatically implies `ProtectSystem=strict`, `ProtectHome=read-only`, `NoNewPrivileges=yes`, and more — a strong, convenient default bundle.
 
-**The problem specific to AI_BRAIN:** the vault AI_BRAIN must read/write is owned by the human's own login UID, typically not group/other-writable. `ReadWritePaths=` only controls **mount-namespace visibility**, not **Unix DAC permission bits**. A dynamically-allocated UID with no group membership in common with the human user will get `EACCES` trying to write into the human's own vault directory, regardless of `ReadWritePaths=` listing it. Workarounds exist (POSIX ACLs, `SupplementaryGroups=`) but none are clean or compatible with `DynamicUser=`'s fully-synthetic identity model.
+**The problem specific to ATHENA AI-BRAIN:** the vault ATHENA AI-BRAIN must read/write is owned by the human's own login UID, typically not group/other-writable. `ReadWritePaths=` only controls **mount-namespace visibility**, not **Unix DAC permission bits**. A dynamically-allocated UID with no group membership in common with the human user will get `EACCES` trying to write into the human's own vault directory, regardless of `ReadWritePaths=` listing it. Workarounds exist (POSIX ACLs, `SupplementaryGroups=`) but none are clean or compatible with `DynamicUser=`'s fully-synthetic identity model.
 
-**Recommendation:** run both units as the human's own account. For a `systemd --user` unit this is automatic. This gives up `DynamicUser=`'s "no persistent identity to compromise" property, but that property was never AI_BRAIN's actual threat model — the threat is a *path-traversal bug*, not *credential theft of a service account* — and every other hardening directive (`ProtectSystem=strict`, `ProtectHome=`, `ReadWritePaths=`, `NoNewPrivileges=`) works identically for a fixed user as for a dynamic one; `DynamicUser=` merely *implies* a subset of them as a convenience default.
+**Recommendation:** run both units as the human's own account. For a `systemd --user` unit this is automatic. This gives up `DynamicUser=`'s "no persistent identity to compromise" property, but that property was never ATHENA AI-BRAIN's actual threat model — the threat is a *path-traversal bug*, not *credential theft of a service account* — and every other hardening directive (`ProtectSystem=strict`, `ProtectHome=`, `ReadWritePaths=`, `NoNewPrivileges=`) works identically for a fixed user as for a dynamic one; `DynamicUser=` merely *implies* a subset of them as a convenience default.
 
 ### 3.2 `ProtectHome=yes`, not `ProtectHome=read-only` — a correction to the threat model's literal wording
 
 `docs/SECURITY_MODEL.md` suggests `ProtectHome=` "scoped to read-only except the vault path." Per the systemd.exec documentation: `ProtectHome=read-only` makes `/home`, `/root`, `/run/user` **readable, not inaccessible** — it stops writes, not reads.
 
-This matters because TB-3's threat isn't only "a bug causes an unintended *write*" — it's also "a bug in a *read* path (`note_read`, `vault_search`) resolves outside the vault and the content is returned in a tool response to the calling LLM." Under `ProtectHome=read-only`, `~/.ssh/id_rsa` could still be successfully read and exfiltrated via that tool response. Given AI_BRAIN's read-heavy tool surface (10 of ADR-0007's tools are read-only), **`ProtectHome=yes` (full inaccessibility)** is the correct directive, with the vault path punched back open via an explicit `ReadWritePaths=` entry (which takes precedence over the broader restriction it sits inside).
+This matters because TB-3's threat isn't only "a bug causes an unintended *write*" — it's also "a bug in a *read* path (`note_read`, `vault_search`) resolves outside the vault and the content is returned in a tool response to the calling LLM." Under `ProtectHome=read-only`, `~/.ssh/id_rsa` could still be successfully read and exfiltrated via that tool response. Given ATHENA AI-BRAIN's read-heavy tool surface (10 of ADR-0007's tools are read-only), **`ProtectHome=yes` (full inaccessibility)** is the correct directive, with the vault path punched back open via an explicit `ReadWritePaths=` entry (which takes precedence over the broader restriction it sits inside).
 
 ### 3.3 Directive-by-directive design (shared baseline for both units)
 
@@ -84,8 +84,8 @@ This matters because TB-3's threat isn't only "a bug causes an unintended *write
 | `NoNewPrivileges=` | `yes` | Process and **all its children** (git, gitleaks) can never gain privileges via `execve()` |
 | `ProtectSystem=` | `strict` | Entire filesystem read-only except API pseudo-filesystems and explicit exceptions |
 | `ProtectHome=` | `yes` | `/home`, `/root`, `/run/user` fully inaccessible (not merely read-only — §3.2) |
-| `ReadWritePaths=` | vault path + AI_BRAIN state dir | Explicit exception carved back through `ProtectSystem=strict`/`ProtectHome=yes` |
-| `ReadOnlyPaths=` | embedding model cache dir | AI_BRAIN reads model weights but should never need to write there once downloaded |
+| `ReadWritePaths=` | vault path + ATHENA AI-BRAIN state dir | Explicit exception carved back through `ProtectSystem=strict`/`ProtectHome=yes` |
+| `ReadOnlyPaths=` | embedding model cache dir | ATHENA AI-BRAIN reads model weights but should never need to write there once downloaded |
 | `PrivateTmp=` | `yes` | Isolated `/tmp`, `/var/tmp` |
 | `PrivateDevices=` | `yes` | Hides physical/hardware device nodes — caveat: relax via `DeviceAllow=` if GPU-accelerated inference is ever adopted (ADR-0008 assumes CPU-only today) |
 | `ProtectKernelTunables=` | `yes` | Blocks writes to `/proc/sys`, `/sys` |
@@ -98,9 +98,9 @@ This matters because TB-3's threat isn't only "a bug causes an unintended *write
 | `RestrictSUIDSGID=` | `yes` | Process cannot create SUID/SGID files |
 | `RestrictNamespaces=` | `yes` | Process (and children) cannot create new namespaces — blocks a sandbox-escape technique |
 | `LockPersonality=` | `yes` | Blocks changing the process execution domain |
-| `RestrictRealtime=` | `yes` | Blocks real-time scheduling — irrelevant to AI_BRAIN's workload, zero cost |
+| `RestrictRealtime=` | `yes` | Blocks real-time scheduling — irrelevant to ATHENA AI-BRAIN's workload, zero cost |
 | `RemoveIPC=` | `yes` | Cleans up leftover IPC objects on stop |
-| `CapabilityBoundingSet=` | *(empty)* | AI_BRAIN needs zero Linux capabilities |
+| `CapabilityBoundingSet=` | *(empty)* | ATHENA AI-BRAIN needs zero Linux capabilities |
 | `RestrictAddressFamilies=` | `AF_INET AF_INET6 AF_UNIX` | Outbound HTTPS to LLM providers needs `AF_INET`/`AF_INET6`; `AF_UNIX` needed for local DNS via `systemd-resolved`'s stub socket — no `AF_NETLINK`, `AF_PACKET`, etc. |
 | `UMask=` | `0077` | New files default owner-only, reinforcing P0 item #5's file-permission hardening |
 | `SystemCallFilter=` | `@system-service` (§3.5) | Broad, well-tested syscall group covering ordinary daemon behavior |
@@ -120,7 +120,7 @@ In practice these directive blocks are ~90% identical and would typically be fac
 
 ```ini
 [Unit]
-Description=AI_BRAIN Huey background worker
+Description=ATHENA AI-BRAIN Huey background worker
 After=network-online.target docker.service
 Wants=network-online.target
 
@@ -175,7 +175,7 @@ WantedBy=default.target
 
 ```bash
 #!/usr/bin/env bash
-# ai-brain-mcp-launch.sh — sandboxed launcher for AI_BRAIN's stdio MCP server.
+# ai-brain-mcp-launch.sh — sandboxed launcher for ATHENA AI-BRAIN's stdio MCP server.
 set -euo pipefail
 
 VAULT_DIR="${AI_BRAIN_VAULT_DIR:?set AI_BRAIN_VAULT_DIR}"
@@ -214,7 +214,7 @@ exec bwrap \
 
 Purpose of the non-obvious flags:
 - `--unshare-pid`/`--unshare-uts`/`--unshare-cgroup` without `--unshare-net`: preserves the host network namespace entirely (needed for outbound HTTPS to LLM providers and loopback access to Qdrant on `127.0.0.1:6333`), while isolating PID/hostname/cgroup view.
-- `--die-with-parent`: if the MCP client dies, the sandboxed AI_BRAIN process dies with it — no orphaned process holding the vault open.
+- `--die-with-parent`: if the MCP client dies, the sandboxed ATHENA AI-BRAIN process dies with it — no orphaned process holding the vault open.
 - Explicit `--perms 0000 --dir` over `.ssh`/`.aws`/`.gnupg` rather than relying only on a blanket read-only `$HOME`: belt-and-suspenders, matching the concrete pattern used for exactly this purpose in the cited Claude Code CLI bubblewrap write-up.
 - `--clearenv` + explicit `--setenv`: prevents environment-variable leakage (inherited API keys, SSH agent socket paths) into the sandboxed process.
 
@@ -223,7 +223,7 @@ Purpose of the non-obvious flags:
 **Recommendation: yes, but only the broad `@system-service` group — not a hand-built per-syscall allowlist.**
 
 - systemd's `@system-service` group is explicitly documented as "a broad set covering what well-behaved daemons typically need" — appropriate for a Python asyncio process doing filesystem watching, SQLite access, network I/O, and subprocess spawning.
-- A **narrow, hand-picked allowlist is the wrong tool here**: real-world reports show even simple, common tools breaking under moderately restrictive filters, and Python's own asyncio subprocess-management code has known interactions with restrictive process-signal/syscall handling. AI_BRAIN's syscall surface is the union of Python's asyncio runtime, `aiosqlite`, PyTorch/`sentence-transformers` (which may use `mbind`/`madvise`/`prctl`), `qdrant-client`'s networking, **and** whatever `git`/`gitleaks` need as inherited children (§4) — hand-building and maintaining a minimal correct allowlist across dependency upgrades is a high-maintenance, high-false-positive-risk undertaking for a solo-maintained project. This is over-engineering for how AI_BRAIN is actually run.
+- A **narrow, hand-picked allowlist is the wrong tool here**: real-world reports show even simple, common tools breaking under moderately restrictive filters, and Python's own asyncio subprocess-management code has known interactions with restrictive process-signal/syscall handling. ATHENA AI-BRAIN's syscall surface is the union of Python's asyncio runtime, `aiosqlite`, PyTorch/`sentence-transformers` (which may use `mbind`/`madvise`/`prctl`), `qdrant-client`'s networking, **and** whatever `git`/`gitleaks` need as inherited children (§4) — hand-building and maintaining a minimal correct allowlist across dependency upgrades is a high-maintenance, high-false-positive-risk undertaking for a solo-maintained project. This is over-engineering for how ATHENA AI-BRAIN is actually run.
 - `SystemCallErrorNumber=EPERM` (rather than the default seccomp "kill" action) is specifically recommended during rollout: a filtered syscall then raises a normal Python `OSError`/`PermissionError` rather than the process being silently `SIGSYS`-terminated with no application-level trace.
 
 ### 3.6 Kali/systemd version check
@@ -238,7 +238,7 @@ The mechanism, stated precisely:
 
 - **Mount namespace** (`ProtectSystem=`, `ProtectHome=`, `ReadWritePaths=`, `PrivateTmp=`): systemd constructs the private mount namespace *before* `execve()`-ing the unit's main process. Every process that main process subsequently `fork()`s/`exec()`s (`asyncio.create_subprocess_exec("git", ...)`) inherits that same mount namespace by default — namespace membership persists across `fork()`/`exec()` unless a process explicitly calls `unshare()`/`setns()`, and both require `CAP_SYS_ADMIN`, already excluded from `CapabilityBoundingSet=` and further blocked by `RestrictNamespaces=yes`. Practically: `git commit`, `git push`, and `gitleaks` running as children see exactly the same filesystem view as the parent.
 - **`NoNewPrivileges=`**: inherited across `execve()` by children forever.
-- **Seccomp filter**: a BPF program attached to the process, inherited by every child and only narrowable further, never widened. This is precisely why §3.5 recommends the broad group rather than a narrow allowlist: `git`/`gitleaks` must also operate within whatever filter is set on the parent, and a filter tuned only for AI_BRAIN's own Python code would cause `git` subprocesses to be killed mid-operation — hard to debug if `SystemCallErrorNumber=EPERM` weren't set.
+- **Seccomp filter**: a BPF program attached to the process, inherited by every child and only narrowable further, never widened. This is precisely why §3.5 recommends the broad group rather than a narrow allowlist: `git`/`gitleaks` must also operate within whatever filter is set on the parent, and a filter tuned only for ATHENA AI-BRAIN's own Python code would cause `git` subprocesses to be killed mid-operation — hard to debug if `SystemCallErrorNumber=EPERM` weren't set.
 - **Bubblewrap** works identically in spirit: the sandbox is established once, at the root of the process tree, and child processes remain inside the same mount/network namespace configuration as the wrapped parent.
 
 **Implication for ADR-0005's Git Automation Module:** no code changes required — it was already designed around argument-list-only subprocess invocations, exactly the pattern that inherits sandboxing cleanly. The one operational risk is **scope, not mechanism**: `ReadWritePaths=`/`ReadOnlyPaths=` must include everything `git` itself needs — the vault's `.git` directory (already covered) and global git config at `~/.gitconfig` if used (**not** covered by default under `ProtectHome=yes`, must be added as a `ReadOnlyPaths=` exception or replaced with `GIT_CONFIG_GLOBAL=/dev/null` + explicit `-c` flags, consistent with ADR-0005's "argv-only, nothing implicit" philosophy). **This is a concrete Phase 1 implementation checklist item**: verify empirically (§7) that `git commit` succeeds inside the sandbox without `~/.gitconfig`, and if it does need it, add a narrowly-scoped exception rather than widening `ProtectHome=`.
@@ -247,22 +247,22 @@ The mechanism, stated precisely:
 
 | Failure scenario | Symptom | Diagnosis path |
 |---|---|---|
-| `ReadWritePaths=` doesn't cover a path AI_BRAIN legitimately needs | `PermissionError`/`OSError` from Python; `git` subprocess exits nonzero with an opaque error | `journalctl --user -u ai-brain-huey-worker.service -e`; `systemd-analyze security` re-confirms which directive is active; extend `system_diagnostics` (ADR-0007) with a "sandbox self-test" — canary read/write against each configured path at startup |
+| `ReadWritePaths=` doesn't cover a path ATHENA AI-BRAIN legitimately needs | `PermissionError`/`OSError` from Python; `git` subprocess exits nonzero with an opaque error | `journalctl --user -u ai-brain-huey-worker.service -e`; `systemd-analyze security` re-confirms which directive is active; extend `system_diagnostics` (ADR-0007) with a "sandbox self-test" — canary read/write against each configured path at startup |
 | `SystemCallFilter=@system-service` is missing a syscall a dependency update starts using | With `SystemCallErrorNumber=EPERM`: a catchable `OSError`. Without it: silent `SIGSYS`-termination, no application-level log line | This is exactly why `SystemCallErrorNumber=EPERM` is specified — always keep it during any dependency upgrade window |
 | `MemoryDenyWriteExecute=yes` breaks a JIT-compiling ML backend | Crash or `SIGSEGV`/mmap failure specifically during embedding-model load or first inference | Bisect by toggling the directive off; if confirmed, omit rather than degrading the embedding pipeline |
 | `ProtectHome=yes` blocks something outside `ReadWritePaths=`/`ReadOnlyPaths=` (locale files, fontconfig cache) | Opaque import-time or first-use failure | `systemd-analyze security` plus a first-run smoke test covering cold-start of every dependency |
 | bubblewrap wrapper script bug (MCP-server path) | MCP client reports the server exited immediately or failed the handshake — harder to diagnose, no `journalctl` equivalent | Run the `bwrap` command manually from a terminal to see stderr directly; add a debug flag with `set -x` |
 
-**General diagnostic principle:** every failure mode above degrades to a **loud, immediate error**, never a silent bypass — the property that makes the sandbox worth having. Phase 1 implementation should make AI_BRAIN's own error handling surface *which* directive blocked *what path* as clearly as systemd's own logs do.
+**General diagnostic principle:** every failure mode above degrades to a **loud, immediate error**, never a silent bypass — the property that makes the sandbox worth having. Phase 1 implementation should make ATHENA AI-BRAIN's own error handling surface *which* directive blocked *what path* as clearly as systemd's own logs do.
 
 ## 6. Security Considerations (residual risk)
 
 1. **The path-canonicalization bug still needs fixing.** This design is worthless if read as "we don't need to get the vault-safety-boundary design exactly right because the sandbox will catch it" — the sandbox catches *filesystem escapes*, not logic errors that stay within the vault (e.g., a bug letting one vault note overwrite another arbitrary vault note is invisible to this sandbox entirely).
-2. **An attacker who can influence AI_BRAIN's own configuration** (the vault path, unit file, wrapper script) can simply widen `ReadWritePaths=` — this design assumes the attacker's foothold is *through a tool call*, not through direct control of deployment configuration.
-3. **`AF_INET`/`AF_INET6` being permitted at all means the sandbox does nothing against TB-9's exfiltration risk** — it can't distinguish "AI_BRAIN's own legitimate LLM call" from "an injection-triggered exfiltration call" using the same code path. That's TB-2/TB-9's territory, not something OS sandboxing can close.
+2. **An attacker who can influence ATHENA AI-BRAIN's own configuration** (the vault path, unit file, wrapper script) can simply widen `ReadWritePaths=` — this design assumes the attacker's foothold is *through a tool call*, not through direct control of deployment configuration.
+3. **`AF_INET`/`AF_INET6` being permitted at all means the sandbox does nothing against TB-9's exfiltration risk** — it can't distinguish "ATHENA AI-BRAIN's own legitimate LLM call" from "an injection-triggered exfiltration call" using the same code path. That's TB-2/TB-9's territory, not something OS sandboxing can close.
 4. **`systemd-analyze security`'s score is a heuristic, not a proof** — useful to guide hardening and as a regression gate, not a claim of "safe."
-5. **The bubblewrap path has a materially different maturity/audit profile than the systemd path.** systemd's directives are extensively used across the ecosystem; AI_BRAIN's specific `bwrap` invocation is bespoke and needs the same careful review/testing as any other security-sensitive module.
-6. **`DynamicUser=`'s rejection (§3.1) means AI_BRAIN's processes run under the human's own identity.** If a different, unrelated local process under the same user is compromised, it already shares that UID and filesystem permissions — this sandbox protects against AI_BRAIN's own bugs, not against a sibling process under the same account, consistent with `docs/SECURITY_MODEL.md`'s own TB-3 framing.
+5. **The bubblewrap path has a materially different maturity/audit profile than the systemd path.** systemd's directives are extensively used across the ecosystem; ATHENA AI-BRAIN's specific `bwrap` invocation is bespoke and needs the same careful review/testing as any other security-sensitive module.
+6. **`DynamicUser=`'s rejection (§3.1) means ATHENA AI-BRAIN's processes run under the human's own identity.** If a different, unrelated local process under the same user is compromised, it already shares that UID and filesystem permissions — this sandbox protects against ATHENA AI-BRAIN's own bugs, not against a sibling process under the same account, consistent with `docs/SECURITY_MODEL.md`'s own TB-3 framing.
 
 ## 7. Test Strategy
 
@@ -285,7 +285,7 @@ The mechanism, stated precisely:
 
 ### 7.3 Ownership
 
-These tests belong in AI_BRAIN's own test suite, not a manual runbook — Constitution Article 9 requires threat-modeled, security-sensitive functionality to have tests, not just a design document describing what tests should exist.
+These tests belong in ATHENA AI-BRAIN's own test suite, not a manual runbook — Constitution Article 9 requires threat-modeled, security-sensitive functionality to have tests, not just a design document describing what tests should exist.
 
 ## References
 

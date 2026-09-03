@@ -1,8 +1,8 @@
-# AI_BRAIN — Current State
+# ATHENA AI-BRAIN — Current State
 
 ## Project
 
-AI_BRAIN
+ATHENA AI-BRAIN
 
 ## Development Mode
 
@@ -10,17 +10,18 @@ Ground-up development with Claude Code
 
 ## Current Phase
 
-Phase 3 — Indexing (in progress; Phases 1 and 2 are complete and committed)
+Phase 4 — Retrieval (implemented and tested this session; Phases 1-3 are complete and committed, Phase 3 committed already)
 
 ## Current Status
 
-**Phase 0 is fully closed** (all eleven ADRs accepted, all exit criteria satisfied). **Phase 1 (Foundation)** and **Phase 2 (Vault Engine)** are both complete, tested, and committed/pushed to `github.com/A3lxq/AI_BRAIN` `main`:
+**Phase 0 is fully closed** (all eleven ADRs accepted, all exit criteria satisfied). **Phase 1 (Foundation)**, **Phase 2 (Vault Engine)**, and **Phase 3 (Indexing)** are all complete, tested, and committed/pushed to `github.com/A3lxq/AI_BRAIN` `main`:
 - Phase 1 (`a4050d3`, merged as `d97840d`): package scaffolding, config/logging/CLI/doctor, all four P0 security modules, OS-sandboxing deployment configs.
 - Phase 2 (`aa76ce7`): SQLite migration runner, repository layer, filesystem watcher, the idempotent `ingest_note` job, bootstrap/reconcile, `ai_brain.worker`.
+- Phase 3 (`561f8d4`): chunking, embedding, Qdrant store, the `index_note` job, `index_state` schema.
 
-**Phase 3 (Indexing) is now implemented and tested**, per `docs/design/indexing-pipeline.md` (accepted 2026-09-02, implemented 2026-09-02):
+**Phase 3 (Indexing) recap**, per `docs/design/indexing-pipeline.md` (accepted 2026-09-02, implemented 2026-09-02):
 
-- `ai_brain.indexing.chunking` — structure-aware Markdown chunking via `chonkie` 1.7.0, hand-built heading-aware `RecursiveRules` (never `from_recipe()`, which makes a live HuggingFace Hub network call). **Empirically confirmed**: chunk boundaries fall exactly on AI_BRAIN's real conversational-turn headers (`# you asked`, `### USER`) — no custom pre-splitter needed.
+- `ai_brain.indexing.chunking` — structure-aware Markdown chunking via `chonkie` 1.7.0, hand-built heading-aware `RecursiveRules` (never `from_recipe()`, which makes a live HuggingFace Hub network call). **Empirically confirmed**: chunk boundaries fall exactly on ATHENA AI-BRAIN's real conversational-turn headers (`# you asked`, `### USER`) — no custom pre-splitter needed.
 - `ai_brain.indexing.embedding` — dense embeddings (`BAAI/bge-m3`, 1024-dim, revision-pinned to a resolved commit hash) and sparse embeddings (`Qdrant/minicoil-v1` via `fastembed`, no revision-pinning mechanism exists for this one — a real, documented gap, not silently faked).
 - `ai_brain.indexing.qdrant_store` — collection/alias lifecycle (atomic alias updates, lock-guarded), point upsert/delete, payload indexes.
 - `ai_brain.indexing.index_note` — the idempotent per-note indexing job, chained after `ingest_note()`'s success. Embedding and the Qdrant upsert both happen *before* any SQLite `chunks` row is written, guaranteeing zero partial rows on failure.
@@ -30,15 +31,28 @@ Phase 3 — Indexing (in progress; Phases 1 and 2 are complete and committed)
 
 **A critical CVE (CVE-2026-68770, CVSS 9.8) in `sentence-transformers` was found during research and resolved by direct source verification** — confirmed fixed in v6.0.0 (three weeks after disclosure) by reading the actual GitHub source at the exact pre-fix and post-fix versions; `sentence-transformers>=6.0.0` is now pinned.
 
-241/241 tests passing (4 correctly `skip`-marked, not silently omitted, pending Qdrant/Docker access), mypy --strict clean, ruff clean. **Live end-to-end verification performed**: `ai-brain migrate` (4 migrations) → `ai-brain doctor` (correctly reports `qdrant_reachable: warn`, connection refused) → `ai-brain ingest bootstrap` (gracefully degrades to metadata-only, confirmed via DB inspection: `index_state='stale'`, zero orphaned `chunks` rows) → `ai-brain index bootstrap` (fails cleanly with a readable error, not a raw traceback, when Qdrant is unreachable). **This session's Phase 3 work has not yet been committed** — awaiting explicit user go-ahead, per standing practice.
+241/241 tests passing (4 correctly `skip`-marked, not silently omitted, pending Qdrant/Docker access), mypy --strict clean, ruff clean. Committed as `561f8d4`.
 
-**Known environment blocker, not a code gap**: this development environment's user account is not in the `docker` group and interactive `sudo` is unavailable, so a live Qdrant server cannot be started here. Every test needing one is written as real, correct code but marked `skip` with a clear reason — see `docs/design/indexing-pipeline.md` §0/§8.
+**Phase 4 (Retrieval) is now implemented and tested**, per `docs/design/retrieval-pipeline.md` (accepted 2026-09-03, implemented 2026-09-03):
+
+- `ai_brain.retrieval.keyword_search` — SQLite FTS5 search over `chunks_fts`/`notes_fts`, with a verified-safe `sanitize_fts5_query` closing `SECURITY_MODEL.md` P1 item 10 (TB-7, FTS5 query-syntax injection) for the first time. **A documentation-derived assumption about FTS5 phrase concatenation was tested and found wrong** before it reached the implementation — corrected via direct empirical testing, not left as an unverified belief.
+- `ai_brain.retrieval.vector_search` — Qdrant hybrid dense+sparse (`FusionQuery(fusion=Fusion.RRF)`) query construction. **A real Qdrant embedded-mode bug was found empirically**: a filter set only on the outer `query_filter` was silently ignored; the same filter set on every `Prefetch` worked. Mitigated defensively (filter on every prefetch) regardless of whether a real server has the same bug — unconfirmed there, Docker-blocked (§0/§8 of the design doc).
+- `ai_brain.retrieval.fusion` — hand-written Reciprocal Rank Fusion (`k=60`, ADR-0003's own "hand-rollable" call), three-way over vector hits, chunk-keyword hits, and note-title hits (mapped to each note's first chunk as a representative proxy).
+- `ai_brain.retrieval.reranking` — cross-encoder reranking via `BAAI/bge-reranker-v2-m3`, revision-pinned (`953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e`, resolved via `HfApi` and cross-checked against the raw HF HTTP API). **A real API-drift finding**: `CrossEncoder`'s activation-function parameter is `activation_fn` in the current API, not `default_activation_function` as older docs describe.
+- `ai_brain.retrieval.context` — token-budgeted greedy context assembly with per-chunk citations, never truncating a chunk mid-text.
+- `ai_brain.retrieval.evaluation` — Recall@K/Precision@K (K=3,5,10), MRR, nDCG@10, latency p50/p95, plus a distinct `unanswerable_top1_false_positive_rate` metric for deliberately-unanswerable questions (excluded from the other averages, tracked separately). A 10-note/17-question starter corpus ships in `tests/retrieval/fixtures/eval_corpus/` (below `TESTING_STRATEGY.md`'s 30-60 target, explicitly flagged, not silently under-delivered).
+- `ai_brain.retrieval.search` — the orchestrator (`search()`/`search_ranked_note_paths()`), degrading to keyword-only fusion (not propagating the exception) when Qdrant is unreachable at query time.
+- CLI: `ai-brain retrieval evaluate [--corpus PATH]` — prints the report, always exits 0 (no regression-gating threshold in this pass, explicitly flagged, not an oversight).
+
+296/296 tests passing (5 correctly `skip`-marked pending Qdrant/Docker access), mypy --strict clean, ruff clean. **Live end-to-end verification performed** against the real eval corpus with Qdrant unreachable throughout (`ai-brain migrate` → `ai-brain ingest bootstrap`, degrades gracefully → `ai-brain index bootstrap`, fails cleanly as expected since indexing requires Qdrant → `ai-brain retrieval evaluate`). **This confirmed a real, previously-only-analytical architectural finding, now documented in the design doc's §8**: because `index_note()` never writes any `chunks` rows without a successful Qdrant upsert, and `fusion.fuse()` correctly drops any note-title hit whose note has zero chunks, a fully-Qdrant-down environment's "keyword-only degradation" path currently returns **zero** results end-to-end (not just reduced-quality ones) — verified live: all 17 eval questions produced `recall@k`/`precision@k`/`mrr`/`ndcg@10`/`unanswerable_top1_false_positive_rate` of `0.000`. Each contributing mechanism is individually correct and already tested; the gap is in their composition, not a bug in either one — flagged as an open item for a future phase/addendum ADR, not silently patched into this accepted design. **This session's Phase 4 work has not yet been committed** — awaiting explicit user go-ahead, per standing practice.
+
+**Known environment blocker, not a code gap**: this development environment's user account is not in the `docker` group and interactive `sudo` is unavailable, so a live Qdrant server cannot be started here. Every test needing one is written as real, correct code but marked `skip` with a clear reason — see `docs/design/indexing-pipeline.md` §0/§8 and `docs/design/retrieval-pipeline.md` §0/§8.
 
 ## Accepted Architecture
 
 - Runtime language: **Python** — ADR-0001 accepted 2026-08-22 (see `docs/adr/0001-runtime-language-selection.md`)
-- Job/queue library: **Huey with SQLite backend** (`SqliteHuey`), default serializer swapped off pickle, **own SQLite file separate from AI_BRAIN's metadata database** (confirmed by ADR-0004) — ADR-0002 accepted 2026-08-22 (see `docs/adr/0002-job-queue-architecture.md`); validate the async bridge (`aget_result()`) against one real job type early in Phase 1, with the hand-rolled asyncio+SQLite queue as documented fallback if that proves awkward
-- Event audit/replay log: **narrow append-only `events` table** in AI_BRAIN's metadata SQLite database (not Huey's), recording domain-meaningful transitions across filesystem/Git/job/dedup/reconciliation domains per a shared envelope schema — ADR-0010 accepted 2026-08-27 (see `docs/adr/0010-event-audit-log.md`); retention/pruning policy deferred until table growth is measured
+- Job/queue library: **Huey with SQLite backend** (`SqliteHuey`), default serializer swapped off pickle, **own SQLite file separate from ATHENA AI-BRAIN's metadata database** (confirmed by ADR-0004) — ADR-0002 accepted 2026-08-22 (see `docs/adr/0002-job-queue-architecture.md`); validate the async bridge (`aget_result()`) against one real job type early in Phase 1, with the hand-rolled asyncio+SQLite queue as documented fallback if that proves awkward
+- Event audit/replay log: **narrow append-only `events` table** in ATHENA AI-BRAIN's metadata SQLite database (not Huey's), recording domain-meaningful transitions across filesystem/Git/job/dedup/reconciliation domains per a shared envelope schema — ADR-0010 accepted 2026-08-27 (see `docs/adr/0010-event-audit-log.md`); retention/pruning policy deferred until table growth is measured
 - Secret-scan schema: **`notes.secret_scan_status` column** (orthogonal to `status`/`index_state`) + **`note_secret_findings`** + **`secret_scan_allowlist`** tables in `ai_brain.db`, fingerprint-keyed allowlisting with mandatory `reason` — ADR-0011 accepted 2026-08-27 (see `docs/adr/0011-secret-scan-schema.md`); formalizes the schema `docs/design/pre-ingestion-secret-scanning.md` specifies; two new MCP tools (`secret_findings_list`, `secret_finding_resolve`) still need adding to ADR-0007's tool table
 - RAG orchestration: **hand-rolled composable primitives** — `qdrant-client` + `chonkie` (chunking) + SQLite FTS5 (keyword search) + hand-written cross-store fusion + `sentence-transformers` (embeddings/reranking) + a small `Protocol`-based multi-provider LLM adapter — no LangChain/LlamaIndex adoption. ADR-0003 accepted 2026-08-22 (see `docs/adr/0003-rag-orchestration-approach.md`); verify `chonkie`'s frontmatter handling early in Phase 1
 - SQLite access layer: **hand-rolled thin repository layer over `aiosqlite`** — typed functions per query, parameterized SQL, a minimal `PRAGMA user_version`-driven migration runner, FTS5 external-content tables with hand-written trigger sync; Peewee documented as fallback. ADR-0004 accepted 2026-08-22 (see `docs/adr/0004-sqlite-access-layer.md`); verify connection-management pattern (single connection vs. small pool) during Phase 1 prototyping
@@ -48,7 +62,7 @@ Phase 3 — Indexing (in progress; Phases 1 and 2 are complete and committed)
 - Embeddings/sparse/reranker: **BGE-M3** (dense) + **bge-reranker-v2-m3** (reranker) + Qdrant **miniCOIL** via `fastembed` (sparse); Qwen3-Embedding-0.6B + Qwen3-Reranker-0.6B documented as a close fallback; BM25 fallback for the sparse leg if vault language composition is meaningfully non-English. ADR-0008 accepted 2026-08-24 (see `docs/adr/0008-embeddings-model-choice.md`); provisional-but-documented, re-evaluate in 6–12 months via a new ADR; collection access must use an alias, never a hardcoded name
 - Filesystem event architecture: light, non-semantic debouncing (quiet-window per-path) + idempotent Huey jobs as the real safety net + a periodic/startup reconciliation (full-scan) job as backstop; `.git`/`.obsidian`/plugin-cache excluded from watch scope; `fs.inotify.max_user_watches` sysctl raise documented as a deployment prerequisite. ADR-0009 accepted 2026-08-24 (see `docs/adr/0009-filesystem-event-architecture.md`)
 - Obsidian vault as source of truth
-- AI_BRAIN separate from the vault
+- ATHENA AI-BRAIN separate from the vault
 - One unified MCP server
 - Event-driven architecture
 - Hybrid retrieval
@@ -100,7 +114,7 @@ Phase 3 — Indexing (in progress; Phases 1 and 2 are complete and committed)
 - ADR-0010 (events audit/replay table) drafted and accepted 2026-08-27 — see `docs/adr/0010-event-audit-log.md`
 - Four Article-2 design documents written for all six P0 security checklist items, each with purpose/responsibilities/interfaces/dependencies/failure-modes/security-considerations/test-strategy:
   - `docs/design/vault-safety-boundary.md` — path-traversal/symlink mechanism (P0 #1) + `python-frontmatter` YAML-safety verification (P0 #3, confirmed safe by default against upstream source)
-  - `docs/design/os-level-process-sandboxing.md` — systemd hardening for the Huey worker + bubblewrap sandboxing for the stdio MCP server (P0 #2); corrects two specifics in the threat model's own literal wording (`DynamicUser=` doesn't fit AI_BRAIN's vault-ownership model; `ProtectHome=yes` needed, not `read-only`)
+  - `docs/design/os-level-process-sandboxing.md` — systemd hardening for the Huey worker + bubblewrap sandboxing for the stdio MCP server (P0 #2); corrects two specifics in the threat model's own literal wording (`DynamicUser=` doesn't fit ATHENA AI-BRAIN's vault-ownership model; `ProtectHome=yes` needed, not `read-only`)
   - `docs/design/storage-runtime-hardening.md` — Huey serializer startup assertion (P0 #4, hard-fail) + SQLite/Qdrant file-permission hardening (P0 #5, two-tier fail policy); found Qdrant's Docker root-by-default behavior means host-side chmod alone doesn't protect the data directory without also pinning a non-root image variant
   - `docs/design/pre-ingestion-secret-scanning.md` — `detect-secrets` in-process scanning before chunking/embedding (P0 #6); recommends redact-and-flag by default (not hard-block) specifically because the real vault contains legitimate OWASP security-training content that would otherwise become permanently unsearchable
 
@@ -119,23 +133,31 @@ Phase 3 — Indexing (in progress; Phases 1 and 2 are complete and committed)
 - `ai_brain.indexing.{chunking,embedding,qdrant_store,index_note}` implemented and tested 2026-09-02; `ai_brain.worker`/`ai_brain.vault.bootstrap`/`ai_brain.vault.reconcile` wired to chain indexing after ingestion with graceful Qdrant-unreachable degradation; migration 0004 (`index_state`/`last_index_error`)
 - CLI gained `ai-brain index bootstrap`; doctor gained a `qdrant_reachable` check
 - 241/241 tests passing (4 correctly skipped pending Docker/Qdrant access), mypy --strict clean, ruff clean; live end-to-end CLI verification (migrate/doctor/ingest bootstrap/index bootstrap) confirmed correct graceful-degradation behavior 2026-09-02
+- Phase 3 work committed and pushed to `github.com/A3lxq/AI_BRAIN` `main` (`561f8d4`)
+- `docs/design/retrieval-pipeline.md` drafted and accepted 2026-09-03 — keyword search, vector search, RRF fusion, cross-encoder reranking, context construction, evaluation harness; research found a real Qdrant embedded-mode filter bug and corrected a documentation-derived FTS5 phrase-concatenation misunderstanding before implementation
+- `ai_brain.retrieval.{keyword_search,vector_search,fusion,reranking,context,search,evaluation}` implemented and tested 2026-09-03; a real `CrossEncoder` API-drift finding (`activation_fn`, not `default_activation_function`) caught during implementation
+- CLI gained `ai-brain retrieval evaluate [--corpus PATH]`
+- 296/296 tests passing (55 new this session, 5 correctly skipped pending Docker/Qdrant access), mypy --strict clean, ruff clean; live end-to-end CLI verification against the real 10-note eval corpus (Qdrant unreachable throughout) confirmed and documented a real architectural finding: keyword-only degradation currently returns zero results, not degraded ones, when no note has ever been successfully indexed — see `docs/design/retrieval-pipeline.md` §8
 
 ## Not Yet Completed
 
 - Adding `secret_findings_list`/`secret_finding_resolve` to ADR-0007's tool contract table (a lightweight cross-reference now, or a full entry at implementation time — open question in ADR-0011)
 - Status promotion from `draft` to `active` — no mechanism decided yet for when freshly-ingested legacy content leaves `draft` (open item, carried since Phase 2's design doc §8)
 - `watchdog`'s CVE/maintainer-trust supply-chain review — still flagged as required, not yet actually done
-- `fastembed`/miniCOIL has no revision-pinning mechanism — a real, documented gap in `SECURITY_MODEL.md` P1 item 15's coverage; open until fastembed adds one or AI_BRAIN builds a pre-downloaded-snapshot wrapper
+- `fastembed`/miniCOIL has no revision-pinning mechanism — a real, documented gap in `SECURITY_MODEL.md` P1 item 15's coverage; open until fastembed adds one or ATHENA AI-BRAIN builds a pre-downloaded-snapshot wrapper
 - **Live Qdrant integration testing is blocked in this development environment** — the current user isn't in the `docker` group and interactive `sudo` isn't available; 4 real, correct integration tests are written and `skip`-marked pending this
 - `ai_brain.mcp_server` (stdio MCP server entry point) — still only a placeholder in the bubblewrap script; Phase 6
 - Deciding the real install location/venv path referenced by the systemd unit and bwrap script (currently placeholder paths under `%h`/`$HOME`)
-- Reranking, query-time hybrid fusion, and the retrieval-evaluation corpus — all deliberately out of Phase 3's scope, deferred to Phase 4 (Retrieval)
-- Committing this Phase 3 work to git (nothing has been committed yet this session — awaiting explicit user go-ahead)
+- **Confirmed live gap (§8 of the retrieval design doc)**: keyword-only degradation returns zero results, not degraded ones, when no note has any indexed chunks (i.e. Qdrant has never been reachable) — a real emergent property of two individually-correct, already-tested mechanisms composing badly; a design decision for a future phase/addendum ADR, not fixed in this pass
+- The retrieval-evaluation corpus ships at 10 notes/17 questions, not `TESTING_STRATEGY.md`'s 30-60 note target (explicitly flagged, §2.6/§8 of the design doc)
+- A structural/grep-based CI check enforcing "only `sanitize_fts5_query`-passed strings ever reach a `MATCH` expression" — recommended, not built
+- No regression-gating threshold on `ai-brain retrieval evaluate` — it always exits 0, reporting numbers for a human/future CI step to compare, not gating the build itself
+- Committing this Phase 4 work to git (nothing has been committed yet this session — awaiting explicit user go-ahead)
 
 ## Immediate Next Step
 
-Decide with the user whether to commit the current Phase 3 indexing work now, and whether to resolve the Docker-access blocker (add the current user to the `docker` group, restart the session) so the 4 skipped integration tests can actually run against a live Qdrant server before Phase 3 is considered fully verified. After that, the next substantive work is Phase 4 (Retrieval): hybrid fusion, filters, ranking, reranking (`bge-reranker-v2-m3`, not yet installed — deliberately deferred), context construction, and the retrieval-evaluation corpus.
+Decide with the user whether to commit the current Phase 4 retrieval work now, and whether to resolve the Docker-access blocker (add the current user to the `docker` group, restart the session) so the skipped integration tests (Phase 3 and Phase 4 combined: 5) can actually run against a live Qdrant server, and so the "keyword-only degradation returns zero results" finding can be re-verified against a real end-to-end indexed vault rather than only the Qdrant-down scenario. After that, the next substantive work is **Phase 5 — Knowledge Intelligence** per `docs/ROADMAP.md`: duplicate detection, the merge engine, provenance, and lineage.
 
 ## Important Constraint
 
-Do not start production implementation until Phase 0 exit criteria are satisfied. (Satisfied — Phases 1, 2, and 3 are all implemented and tested.)
+Do not start production implementation until Phase 0 exit criteria are satisfied. (Satisfied — Phases 1 through 4 are all implemented and tested.)

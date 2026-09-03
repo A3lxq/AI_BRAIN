@@ -1,10 +1,10 @@
-# AI_BRAIN — Claude Code Development Pack
+# ATHENA AI-BRAIN — Claude Code Development Pack
 
 > Knowledge should outlive AI models.
 
-This package is the ground-up development specification for **AI_BRAIN**, a vendor-agnostic, event-driven AI Knowledge Operating System built around an Obsidian vault.
+This package is the ground-up development specification for **ATHENA AI-BRAIN**, a vendor-agnostic, event-driven AI Knowledge Operating System built around an Obsidian vault.
 
-AI_BRAIN is developed as a standalone software project. The Obsidian vault is the source of truth; AI_BRAIN provides indexing, retrieval, provenance, knowledge operations, automation, Git versioning, and one unified MCP interface for compatible AI clients.
+ATHENA AI-BRAIN is developed as a standalone software project. The Obsidian vault is the source of truth; ATHENA AI-BRAIN provides indexing, retrieval, provenance, knowledge operations, automation, Git versioning, and one unified MCP interface for compatible AI clients.
 
 ## How to use this pack
 
@@ -21,4 +21,4 @@ AI_BRAIN is developed as a standalone software project. The Obsidian vault is th
 
 ## Core rule
 
-**The LLM proposes. AI_BRAIN validates. The vault remains the source of truth.**
+**The LLM proposes. ATHENA AI-BRAIN validates. The vault remains the source of truth.**

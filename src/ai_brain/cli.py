@@ -112,6 +112,33 @@ def _cmd_index_bootstrap(_args: argparse.Namespace) -> int:
     return 1 if summary.notes_failed else 0
 
 
+def _cmd_retrieval_evaluate(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from ai_brain.worker import run_retrieval_evaluate
+
+    corpus_dir = Path(args.corpus) if args.corpus else None
+    report = run_retrieval_evaluate(corpus_dir=corpus_dir)
+
+    print(f"questions: {report.num_questions} ({report.num_answerable} answerable)")
+    for k, value in report.recall_at_k.items():
+        print(f"recall@{k}: {value:.3f}")
+    for k, value in report.precision_at_k.items():
+        print(f"precision@{k}: {value:.3f}")
+    print(f"mrr: {report.mrr:.3f}")
+    print(f"ndcg@10: {report.ndcg_at_10:.3f}")
+    print(
+        "unanswerable_top1_false_positive_rate: "
+        f"{report.unanswerable_top1_false_positive_rate:.3f}"
+    )
+    print(f"latency p50={report.p50_latency_ms:.1f}ms p95={report.p95_latency_ms:.1f}ms")
+    # No regression-gating threshold in this pass -- an explicit, flagged
+    # scope reduction (design doc §2.6/§8), not an oversight: this command
+    # always exits 0 on a successful run, reporting numbers for a human (or
+    # a future CI step) to compare, rather than gating the build itself.
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ai-brain", description="AI_BRAIN CLI")
     parser.add_argument(
@@ -150,6 +177,24 @@ def build_parser() -> argparse.ArgumentParser:
         "bootstrap", help="index every note not currently indexed"
     )
     index_bootstrap_parser.set_defaults(func=_cmd_index_bootstrap)
+
+    retrieval_parser = subparsers.add_parser("retrieval", help="retrieval pipeline commands")
+    retrieval_subparsers = retrieval_parser.add_subparsers(
+        dest="retrieval_command", required=True
+    )
+
+    evaluate_parser = retrieval_subparsers.add_parser(
+        "evaluate", help="run the retrieval evaluation corpus and print metrics"
+    )
+    evaluate_parser.add_argument(
+        "--corpus",
+        default=None,
+        help=(
+            "path to a corpus directory containing questions.json "
+            "(default: the bundled starter corpus)"
+        ),
+    )
+    evaluate_parser.set_defaults(func=_cmd_retrieval_evaluate)
 
     return parser
 

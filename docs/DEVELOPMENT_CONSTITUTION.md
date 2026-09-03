@@ -1,4 +1,4 @@
-# AI_BRAIN — Development Constitution
+# ATHENA AI-BRAIN — Development Constitution
 
 ## Article 1 — Research Before Implementation
 

@@ -1,14 +1,14 @@
-# AI_BRAIN — Data Model
+# ATHENA AI-BRAIN — Data Model
 
 - **Date:** 2026-08-26
-- **Author:** Claude Code (AI_BRAIN Phase 0)
+- **Author:** Claude Code (ATHENA AI-BRAIN Phase 0)
 - **Status:** Phase 0 exit-criteria deliverable — data model is defined
-- **Scope:** AI_BRAIN's own SQLite metadata database (`ai_brain.db`), distinct from Huey's job-store file (ADR-0002/ADR-0004), plus the Qdrant payload schema that rides alongside vectors in the separate vector store.
+- **Scope:** ATHENA AI-BRAIN's own SQLite metadata database (`ai_brain.db`), distinct from Huey's job-store file (ADR-0002/ADR-0004), plus the Qdrant payload schema that rides alongside vectors in the separate vector store.
 - **Validated against:** a real sample of the user's actual vault content (see §0 below) — this is not a purely theoretical design.
 
 ## 0. Real Vault Data Format — Validated Against a Sample
 
-Before finalizing this schema, a sample of the user's actual private vault backup was inspected (structure only; content was not copied into this or any other AI_BRAIN document, consistent with treating vault content as the user's private data). The sample directly confirmed the master specification's §8 "AI-Origin Folders" example (`CHAT_GPT`, `CLAUDE`, `GROK_GPT`, `QWEN` are not hypothetical folder names — they are the user's real, current vault layout) and revealed a concrete fact that changes a real assumption in this schema's first draft:
+Before finalizing this schema, a sample of the user's actual private vault backup was inspected (structure only; content was not copied into this or any other ATHENA AI-BRAIN document, consistent with treating vault content as the user's private data). The sample directly confirmed the master specification's §8 "AI-Origin Folders" example (`CHAT_GPT`, `CLAUDE`, `GROK_GPT`, `QWEN` are not hypothetical folder names — they are the user's real, current vault layout) and revealed a concrete fact that changes a real assumption in this schema's first draft:
 
 **None of the sampled files have YAML frontmatter.** Three distinct content shapes exist, none of them frontmatter-based:
 
@@ -21,7 +21,7 @@ Before finalizing this schema, a sample of the user's actual private vault backu
 - `source_url` (feeding `provenance_sources.url`, §2.4) is extracted by parsing the first `> From: <url>` line where present; absent for the Qwen and reference-material shapes.
 - `origin` (§2.2) is `ai_generated` for the three chat-export folders and `imported` for reference material like the OWASP folder — this classification is a folder/pattern-based heuristic applied at ingestion time, not a stored field the source file provides.
 - Chunking (ADR-0003, `chonkie`) should treat the `# you asked`/`### USER`-style turn headers as natural chunk/section boundaries for these files, which is a *better* structural signal than frontmatter would have been for this content shape, not a worse one.
-- This does **not** invalidate ADR-0003's flagged Phase 1 check on `chonkie`'s frontmatter handling — future user-authored notes (new content the user writes directly in Obsidian, or notes AI_BRAIN itself creates via `note_create`/`research_commit`) may well use frontmatter going forward, and the schema must support both shapes. The finding here is specifically that the **existing corpus being migrated in** does not, and ingestion logic must not assume it does.
+- This does **not** invalidate ADR-0003's flagged Phase 1 check on `chonkie`'s frontmatter handling — future user-authored notes (new content the user writes directly in Obsidian, or notes ATHENA AI-BRAIN itself creates via `note_create`/`research_commit`) may well use frontmatter going forward, and the schema must support both shapes. The finding here is specifically that the **existing corpus being migrated in** does not, and ingestion logic must not assume it does.
 - The colon character in `OWASP-A05:injection.mdfiles` (a valid Linux filename character, but unusual and invalid on some other filesystems) is a concrete reminder that path-handling code (ADR-0009's watcher, this schema's `notes.path` column, ADR-0005's Git wrapper) must not assume filenames are limited to a "safe" ASCII subset — this is a real example from the real vault, not a hypothetical edge case.
 
 An **ingestion-time origin/provenance inference step** (folder-name mapping + first-line URL parsing + turn-header detection) is therefore a required Phase 1 component, feeding the `provenance` and `provenance_sources` tables below — it is the concrete mechanism referenced generically in ADR-0003's "provenance schema" requirement.
@@ -218,8 +218,8 @@ CREATE TABLE note_minhash_signatures (
 ### 2.7 Research job correlation
 
 ```sql
--- Durable, AI_BRAIN-owned correlation record. Huey's own job-store file (separate, opaque schema
--- per ADR-0004) tracks live queue/retry mechanics; this table is the domain-durable mirror AI_BRAIN
+-- Durable, ATHENA AI-BRAIN-owned correlation record. Huey's own job-store file (separate, opaque schema
+-- per ADR-0004) tracks live queue/retry mechanics; this table is the domain-durable mirror ATHENA AI-BRAIN
 -- needs for provenance linkage and history, independent of Huey's disposable/re-derivable state.
 CREATE TABLE research_jobs (
     id              INTEGER PRIMARY KEY,
@@ -384,7 +384,7 @@ Per ADR-0008: dense vectors are `BAAI/bge-m3` (1024-dim, cosine distance), spars
 
 **Canonical ordering on `duplicate_candidates` (`note_a_id < note_b_id` + `UNIQUE`).** Prevents the detector from recording both `(A,B)` and `(B,A)` as separate pending candidates, which would otherwise double work for `note_duplicates`/`duplicates_scan` and complicate merge-status tracking. The application must always insert with the smaller `id` as `note_a_id`.
 
-**`research_jobs` as an added table (justification).** Not requested as a required table, added because Huey's own job-store schema is explicitly opaque and out of AI_BRAIN's migration-tracking business (ADR-0004's stated reason for the separate-file decision). Without a durable, AI_BRAIN-owned correlation record, `provenance.research_job_id`, `vault_status`, and the interim `job_status`/`job_cancel` MCP tools (ADR-0007) would have nothing stable to reference once a Huey task's own state is pruned or Huey's internal schema changes across a library upgrade. `research_jobs.huey_task_id` is an opaque correlation string (no cross-database FK — SQLite can't enforce one across separate files anyway), keeping the two databases' schemas fully independent per ADR-0004. `job_type` includes `'ingestion'` specifically to cover the initial bulk-import of the real vault sampled in §0.
+**`research_jobs` as an added table (justification).** Not requested as a required table, added because Huey's own job-store schema is explicitly opaque and out of ATHENA AI-BRAIN's migration-tracking business (ADR-0004's stated reason for the separate-file decision). Without a durable, ATHENA AI-BRAIN-owned correlation record, `provenance.research_job_id`, `vault_status`, and the interim `job_status`/`job_cancel` MCP tools (ADR-0007) would have nothing stable to reference once a Huey task's own state is pruned or Huey's internal schema changes across a library upgrade. `research_jobs.huey_task_id` is an opaque correlation string (no cross-database FK — SQLite can't enforce one across separate files anyway), keeping the two databases' schemas fully independent per ADR-0004. `job_type` includes `'ingestion'` specifically to cover the initial bulk-import of the real vault sampled in §0.
 
 **`note_minhash_signatures` as an added table (justification).** `datasketch`'s `MinHashLSH` index (ADR-0003's lexical-duplicate signal) is an in-process structure; without persisting the underlying signatures, every process restart would require re-hashing the entire vault before duplicate detection is usable again. Persisting the serialized signature is a small, clearly-scoped addition that makes `duplicates_scan` cheap to resume.
 

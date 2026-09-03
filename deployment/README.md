@@ -1,4 +1,4 @@
-# AI_BRAIN Deployment Artifacts
+# ATHENA AI-BRAIN Deployment Artifacts
 
 Status: **Phase 1 configuration artifacts, not yet a fully working deployment.**
 Both files in this directory contain placeholders for components that do not
@@ -12,7 +12,7 @@ document's reasoning.
 
 ## What these two artifacts are
 
-AI_BRAIN has two processes with structurally different lifecycles (design
+ATHENA AI-BRAIN has two processes with structurally different lifecycles (design
 doc §2), so each gets a different sandboxing mechanism:
 
 | Process | Launched by | Sandboxed with | File |
@@ -72,7 +72,7 @@ similar across the two files.
 ## Wiring the bubblewrap script into an MCP client
 
 `bubblewrap/ai-brain-mcp-launch.sh` is meant to be the `command` an MCP
-client invokes to start AI_BRAIN's MCP server, instead of invoking Python
+client invokes to start ATHENA AI-BRAIN's MCP server, instead of invoking Python
 directly. The exact config file format varies by client (Claude Code's and
 Claude Desktop's MCP server configuration formats differ from each other and
 change over time), so this is described conceptually rather than as a
@@ -129,7 +129,7 @@ placeholders, clearly marked with comments in the files themselves:
 4. **Vault path placeholder.** The systemd unit's `ReadWritePaths=` uses
    `%h/ObsidianVault` as a stand-in; confirm this against wherever the vault
    actually ends up living (per CLAUDE.md rule 13, the vault stays separate
-   from AI_BRAIN's own repo/install location) before enabling the unit.
+   from ATHENA AI-BRAIN's own repo/install location) before enabling the unit.
 
 ## Known open questions (carried forward from the design document)
 

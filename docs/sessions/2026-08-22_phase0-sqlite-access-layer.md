@@ -6,7 +6,7 @@
 
 ## Objective
 
-Research and decide AI_BRAIN's SQLite access layer for its metadata store (note metadata, provenance/lineage, knowledge lifecycle/status, duplicate-detection records, FTS5 keyword-search indexes), and resolve the open question from ADR-0002: should Huey's job-store SQLite file share AI_BRAIN's metadata database, or stay separate?
+Research and decide ATHENA AI-BRAIN's SQLite access layer for its metadata store (note metadata, provenance/lineage, knowledge lifecycle/status, duplicate-detection records, FTS5 keyword-search indexes), and resolve the open question from ADR-0002: should Huey's job-store SQLite file share ATHENA AI-BRAIN's metadata database, or stay separate?
 
 ## Completed Work
 
@@ -19,15 +19,15 @@ Research and decide AI_BRAIN's SQLite access layer for its metadata store (note 
 
 ## Key Decisions
 
-1. AI_BRAIN's SQLite access layer will be a **hand-rolled thin repository layer over `aiosqlite`**: typed async functions per query, parameterized SQL, a minimal `PRAGMA user_version`-driven migration runner, and FTS5 external-content tables with hand-written trigger sync. Peewee documented as fallback.
-2. **Huey's job store uses a separate SQLite file** from AI_BRAIN's metadata database, to avoid single-writer-lock contention and keep Huey's opaque schema out of AI_BRAIN's own migration story.
+1. ATHENA AI-BRAIN's SQLite access layer will be a **hand-rolled thin repository layer over `aiosqlite`**: typed async functions per query, parameterized SQL, a minimal `PRAGMA user_version`-driven migration runner, and FTS5 external-content tables with hand-written trigger sync. Peewee documented as fallback.
+2. **Huey's job store uses a separate SQLite file** from ATHENA AI-BRAIN's metadata database, to avoid single-writer-lock contention and keep Huey's opaque schema out of ATHENA AI-BRAIN's own migration story.
 
 ## Key Findings
 
-- FTS5's `CREATE VIRTUAL TABLE` DDL forbids the constraints ORM table-definition APIs require — confirmed via SQLAlchemy's own GitHub discussion (#9466) and an open reflection issue (#4867) — so SQLAlchemy and SQLModel provide no real advantage over hand-rolled SQL for exactly the schema AI_BRAIN's RAG design (ADR-0003) depends on most.
+- FTS5's `CREATE VIRTUAL TABLE` DDL forbids the constraints ORM table-definition APIs require — confirmed via SQLAlchemy's own GitHub discussion (#9466) and an open reflection issue (#4867) — so SQLAlchemy and SQLModel provide no real advantage over hand-rolled SQL for exactly the schema ATHENA AI-BRAIN's RAG design (ADR-0003) depends on most.
 - SQLAlchemy's async SQLite driver has a documented, still-current transactional caveat (no implicit `BEGIN` for `SELECT`/DDL) requiring manual workaround code.
 - Peewee's `FTS5Model` is the one exception researched with genuine first-class FTS5 support, and shares an author (Charles Leifer) with the already-accepted Huey.
-- `PRAGMA busy_timeout` is per-connection and resets to zero on every new connection — every connection opener (AI_BRAIN's app and any Huey worker process) must set it explicitly, regardless of the file-sharing decision.
+- `PRAGMA busy_timeout` is per-connection and resets to zero on every new connection — every connection opener (ATHENA AI-BRAIN's app and any Huey worker process) must set it explicitly, regardless of the file-sharing decision.
 
 ## Files Changed
 

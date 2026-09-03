@@ -1,8 +1,8 @@
-# AI_BRAIN — Master Project Specification
+# ATHENA AI-BRAIN — Master Project Specification
 
 ## 1. Vision
 
-AI_BRAIN is a vendor-agnostic, event-driven AI Knowledge Operating System that makes an Obsidian vault continuously searchable, maintainable, version-controlled, provenance-aware, and accessible to compatible AI systems through one unified MCP server.
+ATHENA AI-BRAIN is a vendor-agnostic, event-driven AI Knowledge Operating System that makes an Obsidian vault continuously searchable, maintainable, version-controlled, provenance-aware, and accessible to compatible AI systems through one unified MCP server.
 
 ### Core philosophy
 
@@ -14,7 +14,7 @@ The knowledge belongs to the user. AI models are replaceable reasoning engines.
 
 The user's Obsidian vault is the authoritative knowledge store.
 
-AI_BRAIN:
+ATHENA AI-BRAIN:
 - reads the vault,
 - observes changes,
 - parses and validates content,
@@ -25,15 +25,15 @@ AI_BRAIN:
 - maintains metadata,
 - integrates with Git.
 
-AI_BRAIN must not become the canonical copy of the user's knowledge.
+ATHENA AI-BRAIN must not become the canonical copy of the user's knowledge.
 
 ## 3. Separation of Concerns
 
-The Obsidian vault and AI_BRAIN repository are separate.
+The Obsidian vault and ATHENA AI-BRAIN repository are separate.
 
 The vault contains knowledge.
 
-The AI_BRAIN repository contains software, configuration templates, documentation, tests, and application state that should not be stored as knowledge notes.
+The ATHENA AI-BRAIN repository contains software, configuration templates, documentation, tests, and application state that should not be stored as knowledge notes.
 
 Secrets, API keys, credentials, local caches, and databases containing derived state must not be committed.
 
@@ -133,7 +133,7 @@ The user's existing organization may contain provider/model folders such as:
 - QWEN
 - GROK_GPT
 
-AI_BRAIN should preserve this provenance-oriented organization when appropriate, while also using YAML metadata so retrieval does not depend on folder location.
+ATHENA AI-BRAIN should preserve this provenance-oriented organization when appropriate, while also using YAML metadata so retrieval does not depend on folder location.
 
 Storage decisions should be made by policy, not hardcoded assumptions.
 

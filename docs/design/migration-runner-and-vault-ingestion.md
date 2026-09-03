@@ -1,7 +1,7 @@
 # Design: SQLite Migration Runner & Vault Ingestion Pipeline
 
 - **Date:** 2026-08-27
-- **Author:** Claude Code (AI_BRAIN Phase 1/2)
+- **Author:** Claude Code (ATHENA AI-BRAIN Phase 1/2)
 - **Status:** Design — implements ADR-0004 (migration runner, repository layer), ADR-0009 (filesystem event architecture), ADR-0010 (events table), ADR-0011 (secret-scan schema); realizes `docs/ROADMAP.md` Phase 2 ("Vault Engine") deliverables: Markdown reader/writer, filesystem watcher, note lifecycle, safe file operations
 - **Depends on / informs:** `docs/DATA_MODEL.md` (full DDL), `docs/EVENT_MODEL.md` (envelope schema, pipeline walkthrough), `docs/design/vault-safety-boundary.md` (path/content safety — reused, not reimplemented), `docs/design/pre-ingestion-secret-scanning.md` (reused, not reimplemented), `docs/adr/0004-sqlite-access-layer.md`, `docs/adr/0009-filesystem-event-architecture.md`, `docs/adr/0010-event-audit-log.md`, `docs/adr/0011-secret-scan-schema.md`
 
@@ -75,7 +75,7 @@ Per attempt, in order:
    e. Upsert the `notes` row (insert if new, update if existing), the `tags` rows (from frontmatter tags where present; none for legacy shapes), one `provenance` row (`activity_type='ingested'`) plus its `provenance_sources` row if `source_url` was recovered, and one `note_lifecycle_history` row (`from_status=NULL, to_status='draft'` on first ingestion — see §2.9 for why `draft`, not `active`).
    f. Append the semantic event: `vault.note_created` (new path) or `vault.note_modified`/`vault.metadata_changed` (existing path, per whether body or only frontmatter changed).
    g. Append `job.completed` (`noop=false`).
-8. `notes.last_indexed_at` is deliberately **not** set by this job — that column's contract (per `DATA_MODEL.md` §2.2, "NULL until first successful chunk/embed pass") belongs to Phase 3's `index_note()` job, which this design does not implement (see §1). A note can be fully ingested (metadata, provenance, lifecycle all recorded) with `last_indexed_at` still NULL, correctly signaling "known to AI_BRAIN, not yet semantically searchable."
+8. `notes.last_indexed_at` is deliberately **not** set by this job — that column's contract (per `DATA_MODEL.md` §2.2, "NULL until first successful chunk/embed pass") belongs to Phase 3's `index_note()` job, which this design does not implement (see §1). A note can be fully ingested (metadata, provenance, lifecycle all recorded) with `last_indexed_at` still NULL, correctly signaling "known to ATHENA AI-BRAIN, not yet semantically searchable."
 
 ### 2.5 Move and delete detection (`ai_brain.vault.ingest`, continued)
 
@@ -88,7 +88,7 @@ Implements ADR-0009 decision on move detection (§3.5 of `docs/EVENT_MODEL.md`) 
 
 ### 2.6 Bootstrap ingestion (`ai_brain.vault.bootstrap`)
 
-A one-time (but safely re-runnable) full-vault walk, needed because the real vault already contains an existing corpus (`DATA_MODEL.md` §0) that predates AI_BRAIN and did not arrive via individual filesystem events:
+A one-time (but safely re-runnable) full-vault walk, needed because the real vault already contains an existing corpus (`DATA_MODEL.md` §0) that predates ATHENA AI-BRAIN and did not arrive via individual filesystem events:
 
 - `os.walk(vault_root, followlinks=False)` (never follows symlinks, mirroring the vault-safety-boundary design's rationale for refusing in-vault symlinks), excluding the same `.git`/`.obsidian`/plugin-cache subtrees as the watcher.
 - Inserts one `research_jobs` row (`job_type='ingestion'`) correlating the whole run.
@@ -339,7 +339,7 @@ Extends `docs/TESTING_STRATEGY.md`'s existing repository/migration-runner test l
 **Bootstrap/reconciliation:**
 - Bootstrap against a fixture vault of N files enqueues exactly N jobs and (once all complete) one `ingestion.job_completed` with matching counts.
 - Re-running bootstrap against an already-fully-ingested fixture vault is fast (all no-ops) and produces zero new `notes`/`provenance` rows.
-- Reconciliation against a fixture vault with one file deleted-outside-AI_BRAIN's-awareness and one file hash-mismatched (edited outside any watched event, simulating downtime) correctly emits exactly those two `reconciliation.discrepancy_found` events and re-enqueues exactly those two paths — everything else untouched.
+- Reconciliation against a fixture vault with one file deleted-outside-ATHENA AI-BRAIN's-awareness and one file hash-mismatched (edited outside any watched event, simulating downtime) correctly emits exactly those two `reconciliation.discrepancy_found` events and re-enqueues exactly those two paths — everything else untouched.
 - A symlink planted in the bootstrap/reconciliation fixture vault is skipped, not followed (reuses the vault-safety-boundary design's own test pattern, applied here at the directory-walk level rather than the single-path level).
 
 **Worker entry point (`ai_brain.worker`):**

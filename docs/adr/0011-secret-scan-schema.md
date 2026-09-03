@@ -9,13 +9,13 @@
 
 ## Context
 
-`docs/SECURITY_MODEL.md`'s P0 remediation item #6 required designing a pre-ingestion secret scanner for vault content — distinct from ADR-0005's pre-commit `gitleaks` hook, which only ever sees AI_BRAIN's own software repository, never vault content. `docs/design/pre-ingestion-secret-scanning.md` produced a complete design: scan every note (whole-file, once, before chunking) using `detect-secrets` invoked in-process; on a high-confidence finding, redact the matched span before it is chunked/embedded/stored and flag the note for review; on a low-confidence (entropy-based) finding, index normally and record the finding without redaction; allow a human to allowlist a specific finding by fingerprint after review.
+`docs/SECURITY_MODEL.md`'s P0 remediation item #6 required designing a pre-ingestion secret scanner for vault content — distinct from ADR-0005's pre-commit `gitleaks` hook, which only ever sees ATHENA AI-BRAIN's own software repository, never vault content. `docs/design/pre-ingestion-secret-scanning.md` produced a complete design: scan every note (whole-file, once, before chunking) using `detect-secrets` invoked in-process; on a high-confidence finding, redact the matched span before it is chunked/embedded/stored and flag the note for review; on a low-confidence (entropy-based) finding, index normally and record the finding without redaction; allow a human to allowlist a specific finding by fingerprint after review.
 
 This decision introduces genuinely new persistent state that no existing ADR's schema covers — `docs/DATA_MODEL.md`'s accepted `notes`/`chunks`/`provenance` tables have no concept of a secret-scan result. Per CLAUDE.md rule 7 ("every significant technical decision gets an ADR") and following the precedent ADR-0010 already set for the `events` table (new infrastructure discovered during a design pass gets its own ADR rather than being silently folded into an existing one), this schema addition needs its own decision record before implementation.
 
 ## Decision
 
-**Accepted:** Add one new column to the existing `notes` table and two new tables to AI_BRAIN's metadata SQLite database (`ai_brain.db`, per ADR-0004 — not Huey's separate job-store file), as designed in `docs/design/pre-ingestion-secret-scanning.md` §6:
+**Accepted:** Add one new column to the existing `notes` table and two new tables to ATHENA AI-BRAIN's metadata SQLite database (`ai_brain.db`, per ADR-0004 — not Huey's separate job-store file), as designed in `docs/design/pre-ingestion-secret-scanning.md` §6:
 
 ```sql
 -- Added to the existing notes table (docs/DATA_MODEL.md §2.2), orthogonal to
@@ -60,7 +60,7 @@ The maintainer reviewed the design and accepted this ADR as proposed on 2026-08-
 |---|---|
 | Overload `notes.status` (the content-lifecycle field) to also carry secret-scan state | Rejected — `docs/EVENT_MODEL.md` §4.1 already established the precedent of adding an orthogonal field (`index_state`) rather than conflating two independent concerns into one enum; a note can legitimately be `active` and `flagged` simultaneously, which a single shared field can't represent cleanly. |
 | Store findings as a JSON blob on the `notes` row instead of a separate table | Rejected — the design's allowlist mechanism (§5 of the design doc) requires per-finding fingerprint lookups and independent lifecycle (allowlisted vs. not), which needs indexed, queryable rows, not an opaque blob; this mirrors `docs/DATA_MODEL.md`'s own rationale for using `note_tags` over a JSON tags column. |
-| Fold the allowlist into ADR-0005's existing `.gitleaks.toml` allowlist mechanism | Rejected — the design doc is explicit that these must stay disjoint: one governs "safe to commit to AI_BRAIN's own code repo," the other governs "safe to index as vault content." Conflating them would let a decision about AI_BRAIN's source code silently bless vault content, or vice versa. |
+| Fold the allowlist into ADR-0005's existing `.gitleaks.toml` allowlist mechanism | Rejected — the design doc is explicit that these must stay disjoint: one governs "safe to commit to ATHENA AI-BRAIN's own code repo," the other governs "safe to index as vault content." Conflating them would let a decision about ATHENA AI-BRAIN's source code silently bless vault content, or vice versa. |
 | Store the raw secret value (not just a hash) for easier human review | Rejected — `detect-secrets`' own `hashed_secret` is used specifically so this schema never persists a second copy of the actual secret; a reviewer works from `plugin_type`/`line_number`/`note_path` to go look at the (already redacted, in the high-confidence case) note directly, not from a stored plaintext value. |
 
 ## Rationale

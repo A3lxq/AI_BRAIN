@@ -6,7 +6,7 @@
 
 ## Objective
 
-Research and decide AI_BRAIN's job/queue architecture: how long-running work (indexing, research/web-ingestion, reindexing, duplicate-detection/merge, Git commit/push) runs without blocking event handlers, while meeting the Testing Strategy's crash-recovery/durability requirements, on a local-first single-machine deployment.
+Research and decide ATHENA AI-BRAIN's job/queue architecture: how long-running work (indexing, research/web-ingestion, reindexing, duplicate-detection/merge, Git commit/push) runs without blocking event handlers, while meeting the Testing Strategy's crash-recovery/durability requirements, on a local-first single-machine deployment.
 
 ## Completed Work
 
@@ -17,7 +17,7 @@ Research and decide AI_BRAIN's job/queue architecture: how long-running work (in
 
 ## Key Decision
 
-**Huey with the SQLite backend (`SqliteHuey`)** is AI_BRAIN's job/queue library, with the default pickle serializer swapped to Huey's built-in `SignedSerializer` or JSON. Rationale: it is the only widely-used, actively-maintained, "Production/Stable" library offering durable, zero-extra-infrastructure SQLite-native job storage, with retry and cron scheduling already built and tested — avoiding AI_BRAIN having to build and test that reliability engineering itself.
+**Huey with the SQLite backend (`SqliteHuey`)** is ATHENA AI-BRAIN's job/queue library, with the default pickle serializer swapped to Huey's built-in `SignedSerializer` or JSON. Rationale: it is the only widely-used, actively-maintained, "Production/Stable" library offering durable, zero-extra-infrastructure SQLite-native job storage, with retry and cron scheduling already built and tested — avoiding ATHENA AI-BRAIN having to build and test that reliability engineering itself.
 
 ## Key Finding
 
@@ -40,7 +40,7 @@ None — research-only session per CLAUDE.md Phase discipline; no code was writt
 ## Unresolved Issues
 
 - Huey's sync-core/`aget_result()` async bridge should be validated against one real job type early in Phase 1; the hand-rolled asyncio+SQLite queue is the documented fallback if that integration proves awkward.
-- Whether Huey's own SQLite job-store file should be the same database as AI_BRAIN's metadata store, or a separate file, is not yet decided — carried forward to the SQLite-access-layer research topic.
+- Whether Huey's own SQLite job-store file should be the same database as ATHENA AI-BRAIN's metadata store, or a separate file, is not yet decided — carried forward to the SQLite-access-layer research topic.
 - The MCP `enqueue_job`/`get_job_status` tool pair design is deferred to the MCP protocol implementation research topic.
 
 ## Next Steps

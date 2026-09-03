@@ -1,16 +1,16 @@
-# Research: Python as AI_BRAIN Runtime
+# Research: Python as ATHENA AI-BRAIN Runtime
 
 - **Research date:** 2026-08-22
-- **Researcher:** Claude Code (AI_BRAIN Phase 0)
+- **Researcher:** Claude Code (ATHENA AI-BRAIN Phase 0)
 - **Status:** Candidate evaluation — feeds ADR-0001 (language/runtime selection)
 
 ## 1. Executive Summary
 
-Python is the strongest ecosystem fit for AI_BRAIN's actual workload shape: an official, actively-maintained MCP SDK; a first-party async Qdrant client; and purpose-built libraries covering nearly every stated need (embeddings + reranking via `sentence-transformers`, semantic chunking via `chonkie`, YAML frontmatter via `python-frontmatter`, filesystem events via `watchdog`, multi-provider LLM abstraction via `litellm`). Its main weaknesses are non-fundamental: the GIL is now officially optional (PEP 779, Python 3.14) but the C-extension ecosystem hasn't caught up, there's no mature single-binary distribution story, and raw Python is genuinely slow for CPU-bound work not delegated to native code. Since AI_BRAIN's actual workload is I/O-bound orchestration plus ML inference delegated to native/ONNX backends, this weakness mostly doesn't bite. A governance risk worth tracking: OpenAI's announced acquisition of Astral (maker of `uv`/`ruff`/`ty`).
+Python is the strongest ecosystem fit for ATHENA AI-BRAIN's actual workload shape: an official, actively-maintained MCP SDK; a first-party async Qdrant client; and purpose-built libraries covering nearly every stated need (embeddings + reranking via `sentence-transformers`, semantic chunking via `chonkie`, YAML frontmatter via `python-frontmatter`, filesystem events via `watchdog`, multi-provider LLM abstraction via `litellm`). Its main weaknesses are non-fundamental: the GIL is now officially optional (PEP 779, Python 3.14) but the C-extension ecosystem hasn't caught up, there's no mature single-binary distribution story, and raw Python is genuinely slow for CPU-bound work not delegated to native code. Since ATHENA AI-BRAIN's actual workload is I/O-bound orchestration plus ML inference delegated to native/ONNX backends, this weakness mostly doesn't bite. A governance risk worth tracking: OpenAI's announced acquisition of Astral (maker of `uv`/`ruff`/`ty`).
 
 ## 2. Problem Being Solved
 
-AI_BRAIN needs one runtime for: vault filesystem watching, Markdown/YAML parsing, structure-aware chunking, embeddings, hybrid retrieval (vector + keyword + metadata + reranking), SQLite metadata storage, a Qdrant vector store client, one unified MCP server decoupled from business logic, multi-LLM-provider abstraction, and safe Git automation — running local-first on Linux (Kali), with strong async/event-driven job handling and a security posture that treats retrieved content as untrusted.
+ATHENA AI-BRAIN needs one runtime for: vault filesystem watching, Markdown/YAML parsing, structure-aware chunking, embeddings, hybrid retrieval (vector + keyword + metadata + reranking), SQLite metadata storage, a Qdrant vector store client, one unified MCP server decoupled from business logic, multi-LLM-provider abstraction, and safe Git automation — running local-first on Linux (Kali), with strong async/event-driven job handling and a security posture that treats retrieved content as untrusted.
 
 ## 3. Technology Overview
 
@@ -18,10 +18,10 @@ CPython is the reference implementation, governed by the Python Software Foundat
 
 ## 4. Architecture Fit
 
-- **asyncio** (stdlib) is the natural fit for AI_BRAIN's I/O-bound majority: filesystem watching, LLM API calls, vector DB queries, MCP transport.
+- **asyncio** (stdlib) is the natural fit for ATHENA AI-BRAIN's I/O-bound majority: filesystem watching, LLM API calls, vector DB queries, MCP transport.
 - **GIL status**: PEP 703's free-threaded build is now officially supported (not experimental) as of 3.14, with single-threaded overhead down to ~5–10% (from ~40% in the 3.13 experimental phase) and up to ~4x speedup on CPU-bound multi-threaded work at ~15–20% more memory cost. However, the third-party C-extension ecosystem is still catching up — this should be treated as an optional future optimization, not a foundational assumption. `multiprocessing` remains the pragmatic path for pure-Python CPU-bound work through 2026–2027.
 - **CPU-bound ML work** (embedding inference) is delegated to PyTorch/ONNX native backends via `sentence-transformers`, so Python itself is mostly an orchestration layer there — not the bottleneck.
-- **Job architecture**: no single obvious default. Celery (heaviest, most mature), Dramatiq (lighter, reliable), Taskiq (async-first, typed, FastAPI-idiomatic), RQ/arq (simplest, weaker throughput). Given AI_BRAIN's local-first single-machine deployment, a full Celery/Redis stack may be overkill — this is flagged as an open Phase 0 decision, not defaulted here.
+- **Job architecture**: no single obvious default. Celery (heaviest, most mature), Dramatiq (lighter, reliable), Taskiq (async-first, typed, FastAPI-idiomatic), RQ/arq (simplest, weaker throughput). Given ATHENA AI-BRAIN's local-first single-machine deployment, a full Celery/Redis stack may be overkill — this is flagged as an open Phase 0 decision, not defaulted here.
 
 ## 5. Alternatives Considered (cross-reference)
 
@@ -38,26 +38,26 @@ Evaluated in parallel: TypeScript/Node.js, Go, Rust (see sibling research docs).
 | 5 | SQLite support | stdlib `sqlite3` (sync, always available); `aiosqlite` for async wrapping; SQLAlchemy 2.x has first-class async support if an ORM is wanted — though a thinner hand-written layer may better fit "small composable modules." |
 | 6 | Vector DB clients | `qdrant-client` is the **official** Qdrant client, sync+async, REST+gRPC, type-hinted, optional `fastembed` extras for local embeddings. Strong first-party fit. |
 | 7 | Async/concurrency | asyncio mature and stdlib. GIL is now officially optional (3.14, PEP 779) but ecosystem-wide adoption is still maturing — treat as a future optimization, not a day-one dependency. |
-| 8 | Type safety | PEP 484+ type hints; three viable checkers (mypy — permissive by default, plugin ecosystem; pyright/Pylance — strict by default, ~98% spec conformance, 3–5x faster than mypy; Astral's `ty` — 10–60x faster but only ~53% spec conformance, still maturing). Fully enforceable at whatever strictness policy AI_BRAIN adopts. |
-| 9 | Performance | 25–100x slower than Rust, 5–15x slower than Go on CPU-bound microbenchmarks — but AI_BRAIN's actual workload (I/O-bound orchestration + native-code-delegated ML inference) sits in Python's performance sweet spot. Pure-Python CPU-bound logic (e.g. custom chunking) is the real risk area. |
+| 8 | Type safety | PEP 484+ type hints; three viable checkers (mypy — permissive by default, plugin ecosystem; pyright/Pylance — strict by default, ~98% spec conformance, 3–5x faster than mypy; Astral's `ty` — 10–60x faster but only ~53% spec conformance, still maturing). Fully enforceable at whatever strictness policy ATHENA AI-BRAIN adopts. |
+| 9 | Performance | 25–100x slower than Rust, 5–15x slower than Go on CPU-bound microbenchmarks — but ATHENA AI-BRAIN's actual workload (I/O-bound orchestration + native-code-delegated ML inference) sits in Python's performance sweet spot. Pure-Python CPU-bound logic (e.g. custom chunking) is the real risk area. |
 | 10 | Security | Safe subprocess pattern is well-documented: `subprocess.run([...], shell=False)` with argument lists, never string concatenation. `GitPython` has documented caveats (non-deterministic cleanup, a Windows-specific untrusted-search-path advisory) — raw `subprocess` with strict validation or GitPython with short-lived instances are both viable, pending a threat-modeled ADR. `pip-audit` is the effective standard supply-chain scanner (known-CVE coverage only). YAML frontmatter parsing must use `yaml.safe_load`, never `yaml.load`. No in-language sandboxing for untrusted code execution — any future "execute untrusted content" feature needs OS-level isolation. |
-| 11 | Deployment | `uv` (Astral) has consolidated the packaging/env story: 10–100x faster than pip, replaces pip+pip-tools+virtualenv+pyenv+pipx, universal lockfile. **Risk flag**: OpenAI announced (Mar 19, 2026) it will acquire Astral (maker of uv/ruff/ty); stated commitment to keep tools open source, but a vendor-concentration risk worth monitoring. No mature single-binary story (PyInstaller has startup/AV-flagging issues; Nuitka is heavier to set up but produces genuinely self-contained executables; PyOxidizer has a slow release cadence) — likely a non-issue for AI_BRAIN's local-first/container deployment model. |
+| 11 | Deployment | `uv` (Astral) has consolidated the packaging/env story: 10–100x faster than pip, replaces pip+pip-tools+virtualenv+pyenv+pipx, universal lockfile. **Risk flag**: OpenAI announced (Mar 19, 2026) it will acquire Astral (maker of uv/ruff/ty); stated commitment to keep tools open source, but a vendor-concentration risk worth monitoring. No mature single-binary story (PyInstaller has startup/AV-flagging issues; Nuitka is heavier to set up but produces genuinely self-contained executables; PyOxidizer has a slow release cadence) — likely a non-issue for ATHENA AI-BRAIN's local-first/container deployment model. |
 | 12 | Linux/Kali compatibility | Kali ships Python 3 by default and enforces PEP 668 "externally managed environment" protections (blocks global `pip install`, steers to venv/pipx) — a non-issue given `uv`/venv is the intended workflow anyway. `watchdog` uses native inotify on Linux. No known incompatibilities. |
 | 13 | Maintainability | `ruff` (Astral) now replaces flake8+Black+isort+pyupgrade+pydocstyle+parts of bandit in one fast binary, 900+ lint rules, single `pyproject.toml` config. Combined with mypy/pyright, gives a strong, low-friction toolchain. Python's dynamic nature means refactoring safety leans more on type checkers/tests than a statically-compiled language — a real, familiar trade-off. |
-| 14 | Developer productivity | `uv` + `ruff` meaningfully cut iteration friction vs. the pre-2023 stack. Mature debugging (pdb, colorized 3.14 tracebacks, REPL syntax highlighting). REPL-driven iteration is a genuine advantage for the RAG-tuning work (chunking strategy, embedding model choice, retrieval quality) that is a meaningful chunk of AI_BRAIN's actual engineering effort. |
+| 14 | Developer productivity | `uv` + `ruff` meaningfully cut iteration friction vs. the pre-2023 stack. Mature debugging (pdb, colorized 3.14 tracebacks, REPL syntax highlighting). REPL-driven iteration is a genuine advantage for the RAG-tuning work (chunking strategy, embedding model choice, retrieval quality) that is a meaningful chunk of ATHENA AI-BRAIN's actual engineering effort. |
 | 15 | Long-term viability | Formalized governance (annual Steering Council elections, new Packaging Council, Security Response Team); 3.13 supported to Oct 2029, 3.14 to Oct 2030; dominant position in AI/ML tooling generally (MCP SDK, LangChain, LlamaIndex, sentence-transformers all Python-first). One monitored risk: OpenAI/Astral acquisition concentrates core tooling (uv/ruff/ty) ownership in a single AI company — doesn't affect CPython/PSF governance, and pip/venv remain a fallback since uv is pip-compatible. |
 
-## 7. AI_BRAIN Relevance
+## 7. ATHENA AI-BRAIN Relevance
 
-Python has an official, purpose-fit library for nearly every named requirement in the master specification: MCP SDK, Qdrant client, embeddings+reranking, semantic chunking, YAML frontmatter parsing, filesystem watching, and multi-provider LLM abstraction. This is the deepest and most turnkey match of the four candidates against AI_BRAIN's specific feature list, at the cost of an open decision on job-queue architecture and RAG-orchestration-framework-vs-hand-rolled (both flagged as needing their own design docs rather than a default pick, consistent with the "small composable modules" principle).
+Python has an official, purpose-fit library for nearly every named requirement in the master specification: MCP SDK, Qdrant client, embeddings+reranking, semantic chunking, YAML frontmatter parsing, filesystem watching, and multi-provider LLM abstraction. This is the deepest and most turnkey match of the four candidates against ATHENA AI-BRAIN's specific feature list, at the cost of an open decision on job-queue architecture and RAG-orchestration-framework-vs-hand-rolled (both flagged as needing their own design docs rather than a default pick, consistent with the "small composable modules" principle).
 
 ## 8. Security
 
-Subprocess/Git safety is achievable via documented patterns (list-form `subprocess.run`, or `GitPython` with caveats noted). `pip-audit` gives known-CVE coverage as a CI baseline. The two YAML/pickle deserialization traps (`yaml.load`, `pickle.load` on untrusted data) are well-known and must be explicitly avoided given AI_BRAIN parses YAML frontmatter from vault notes. No in-language sandboxing exists — any future untrusted-code-execution feature requires OS-level isolation and must go through the constitution's threat-modeling requirement.
+Subprocess/Git safety is achievable via documented patterns (list-form `subprocess.run`, or `GitPython` with caveats noted). `pip-audit` gives known-CVE coverage as a CI baseline. The two YAML/pickle deserialization traps (`yaml.load`, `pickle.load` on untrusted data) are well-known and must be explicitly avoided given ATHENA AI-BRAIN parses YAML frontmatter from vault notes. No in-language sandboxing exists — any future untrusted-code-execution feature requires OS-level isolation and must go through the constitution's threat-modeling requirement.
 
 ## 9. Performance
 
-Good match for AI_BRAIN's actual workload shape (I/O-bound orchestration + native-code ML inference). Risk is confined to custom, pure-Python CPU-bound logic (e.g. hand-written chunking algorithms) — `multiprocessing` or delegation to native libraries is the mitigation; free-threaded Python is a future option, not a day-one dependency.
+Good match for ATHENA AI-BRAIN's actual workload shape (I/O-bound orchestration + native-code ML inference). Risk is confined to custom, pure-Python CPU-bound logic (e.g. hand-written chunking algorithms) — `multiprocessing` or delegation to native libraries is the mitigation; free-threaded Python is a future option, not a day-one dependency.
 
 ## 10. Operational Concerns
 
@@ -68,7 +68,7 @@ Good match for AI_BRAIN's actual workload shape (I/O-bound orchestration + nativ
 
 ## 11. Recommendation (per-candidate verdict, not final cross-language decision)
 
-Python scores as the deepest ecosystem fit for AI_BRAIN's stated feature set, with well-understood and mitigable weaknesses (GIL maturity, raw CPU performance, no single-binary story) that don't land on the project's actual workload shape. Final cross-candidate recommendation is deferred to the comparison matrix and ADR-0001.
+Python scores as the deepest ecosystem fit for ATHENA AI-BRAIN's stated feature set, with well-understood and mitigable weaknesses (GIL maturity, raw CPU performance, no single-binary story) that don't land on the project's actual workload shape. Final cross-candidate recommendation is deferred to the comparison matrix and ADR-0001.
 
 ## 12. References
 

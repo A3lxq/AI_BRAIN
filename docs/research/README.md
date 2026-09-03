@@ -1,4 +1,4 @@
-# AI_BRAIN Technology Research
+# ATHENA AI-BRAIN Technology Research
 
 This directory contains the technical research performed before selecting major technologies.
 

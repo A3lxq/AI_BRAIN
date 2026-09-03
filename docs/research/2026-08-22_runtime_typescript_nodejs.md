@@ -1,16 +1,16 @@
-# Research: TypeScript/Node.js as AI_BRAIN Runtime
+# Research: TypeScript/Node.js as ATHENA AI-BRAIN Runtime
 
 - **Research date:** 2026-08-22
-- **Researcher:** Claude Code (AI_BRAIN Phase 0)
+- **Researcher:** Claude Code (ATHENA AI-BRAIN Phase 0)
 - **Status:** Candidate evaluation — feeds ADR-0001 (language/runtime selection)
 
 ## 1. Executive Summary
 
-TypeScript on Node.js is a strong candidate primarily because the **Model Context Protocol's TypeScript SDK is the reference implementation**, maintained directly by the `modelcontextprotocol` GitHub org (the protocol owner), not a community port. The surrounding ecosystem (Qdrant's official JS client, `chokidar` for filesystem watching, `remark`/`gray-matter` for structure-aware Markdown/frontmatter parsing, the Vercel AI SDK for provider-agnostic LLM access) maps closely onto AI_BRAIN's pipeline. Weak points are a thinner reranking/cross-encoder ecosystem than Python, a genuine and escalating npm supply-chain risk, and the need to deliberately architect around Node's single-threaded event loop for CPU-bound work (chunking, local embeddings) via `worker_threads`.
+TypeScript on Node.js is a strong candidate primarily because the **Model Context Protocol's TypeScript SDK is the reference implementation**, maintained directly by the `modelcontextprotocol` GitHub org (the protocol owner), not a community port. The surrounding ecosystem (Qdrant's official JS client, `chokidar` for filesystem watching, `remark`/`gray-matter` for structure-aware Markdown/frontmatter parsing, the Vercel AI SDK for provider-agnostic LLM access) maps closely onto ATHENA AI-BRAIN's pipeline. Weak points are a thinner reranking/cross-encoder ecosystem than Python, a genuine and escalating npm supply-chain risk, and the need to deliberately architect around Node's single-threaded event loop for CPU-bound work (chunking, local embeddings) via `worker_threads`.
 
 ## 2. Problem Being Solved
 
-AI_BRAIN needs one runtime for: vault filesystem watching, Markdown/YAML parsing, structure-aware chunking, embeddings, hybrid retrieval (vector + keyword + metadata + reranking), SQLite metadata storage, a Qdrant vector store client, one unified MCP server decoupled from business logic, multi-LLM-provider abstraction, and safe Git automation — running local-first on Linux (Kali), with strong async/event-driven job handling and a security posture that treats retrieved content as untrusted.
+ATHENA AI-BRAIN needs one runtime for: vault filesystem watching, Markdown/YAML parsing, structure-aware chunking, embeddings, hybrid retrieval (vector + keyword + metadata + reranking), SQLite metadata storage, a Qdrant vector store client, one unified MCP server decoupled from business logic, multi-LLM-provider abstraction, and safe Git automation — running local-first on Linux (Kali), with strong async/event-driven job handling and a security posture that treats retrieved content as untrusted.
 
 ## 3. Technology Overview
 
@@ -44,11 +44,11 @@ Evaluated in parallel: Python, Go, Rust (see sibling research docs). Runtime alt
 | 12 | Linux/Kali compatibility | No red flags; native-addon builds (e.g. `better-sqlite3`) need standard build tools, typically already present on Kali. |
 | 13 | Maintainability | Static types + mature refactor tooling (VS Code/TS Language Server) support small composable modules; TS 7.0 addresses historical type-check slowdown at scale. |
 | 14 | Developer productivity | Fast iteration via `tsx`/native `.ts` stripping flags; mature editor/debugger tooling (VS Code is itself TS-authored). |
-| 15 | Long-term viability | Node.js governed by the vendor-neutral OpenJS Foundation (Google, Microsoft, IBM members); TypeScript backed by Microsoft with an active, shipping roadmap. Both fit AI_BRAIN's vendor-agnostic philosophy. |
+| 15 | Long-term viability | Node.js governed by the vendor-neutral OpenJS Foundation (Google, Microsoft, IBM members); TypeScript backed by Microsoft with an active, shipping roadmap. Both fit ATHENA AI-BRAIN's vendor-agnostic philosophy. |
 
-## 7. AI_BRAIN Relevance
+## 7. ATHENA AI-BRAIN Relevance
 
-The MCP SDK finding (#2) is the single most decisive point in TypeScript's favor for this specific project, since AI_BRAIN's external interface is defined to be one unified MCP server. Qdrant's first-party client, `chokidar`, and `remark`/`gray-matter` map almost one-to-one onto the vault-watch → parse → chunk → embed → index pipeline. The Vercel AI SDK satisfies the multi-LLM-provider abstraction requirement largely out of the box.
+The MCP SDK finding (#2) is the single most decisive point in TypeScript's favor for this specific project, since ATHENA AI-BRAIN's external interface is defined to be one unified MCP server. Qdrant's first-party client, `chokidar`, and `remark`/`gray-matter` map almost one-to-one onto the vault-watch → parse → chunk → embed → index pipeline. The Vercel AI SDK satisfies the multi-LLM-provider abstraction requirement largely out of the box.
 
 ## 8. Security
 
@@ -94,6 +94,6 @@ TypeScript/Node.js scores strongly, anchored by the MCP SDK being a first-party 
 
 ## 13. Open Questions
 
-- Should AI_BRAIN adopt BullMQ (Redis dependency) or a lighter in-process queue for the job architecture?
+- Should ATHENA AI-BRAIN adopt BullMQ (Redis dependency) or a lighter in-process queue for the job architecture?
 - Should reranking rely on a hosted API (Cohere Rerank) or local ONNX cross-encoders, given the thinner native ecosystem?
 - Should Git automation use `simple-git` (wraps the real `git` binary) or `isomorphic-git` (no subprocess, pure JS) — tradeoff between behavioral fidelity and eliminating subprocess risk entirely?

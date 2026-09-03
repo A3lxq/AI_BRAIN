@@ -1,4 +1,4 @@
-# AI_BRAIN — Documentation Standards
+# ATHENA AI-BRAIN — Documentation Standards
 
 ## Markdown
 
@@ -20,7 +20,7 @@ Each research document should contain:
 4. Architecture
 5. Alternatives
 6. Comparison
-7. AI_BRAIN relevance
+7. ATHENA AI-BRAIN relevance
 8. Security
 9. Performance
 10. Operational concerns

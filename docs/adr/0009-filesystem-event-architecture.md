@@ -1,7 +1,7 @@
-# ADR-0009: Filesystem Event Architecture for AI_BRAIN
+# ADR-0009: Filesystem Event Architecture for ATHENA AI-BRAIN
 
 - **ID:** ADR-0009
-- **Title:** Filesystem Event Architecture for AI_BRAIN
+- **Title:** Filesystem Event Architecture for ATHENA AI-BRAIN
 - **Status:** Accepted
 - **Date proposed:** 2026-08-24
 - **Date accepted:** 2026-08-24
@@ -9,9 +9,9 @@
 
 ## Context
 
-AI_BRAIN needs to translate raw, noisy filesystem events (from `watchdog` watching the Obsidian vault) into durable Huey job triggers, without missing real changes or double-processing, and safely bridging watchdog's thread-based callback model into AI_BRAIN's asyncio/Huey architecture. Full findings: [`docs/research/2026-08-24_filesystem_event_architecture.md`](../research/2026-08-24_filesystem_event_architecture.md).
+ATHENA AI-BRAIN needs to translate raw, noisy filesystem events (from `watchdog` watching the Obsidian vault) into durable Huey job triggers, without missing real changes or double-processing, and safely bridging watchdog's thread-based callback model into ATHENA AI-BRAIN's asyncio/Huey architecture. Full findings: [`docs/research/2026-08-24_filesystem_event_architecture.md`](../research/2026-08-24_filesystem_event_architecture.md).
 
-Key findings: `watchdog` has no built-in time-window debouncing beyond adjacent-duplicate suppression; editor save patterns (temp-file+rename) and inotify's own guarantees (non-atomic move-pairing, cross-boundary moves degrading to delete+create — a confirmed open watchdog issue, #308) mean precise "one true save" detection at the filesystem layer is fighting an inherently unreliable substrate. AI_BRAIN's own Testing Strategy already tolerates duplicate events and repeated jobs — a direct design signal.
+Key findings: `watchdog` has no built-in time-window debouncing beyond adjacent-duplicate suppression; editor save patterns (temp-file+rename) and inotify's own guarantees (non-atomic move-pairing, cross-boundary moves degrading to delete+create — a confirmed open watchdog issue, #308) mean precise "one true save" detection at the filesystem layer is fighting an inherently unreliable substrate. ATHENA AI-BRAIN's own Testing Strategy already tolerates duplicate events and repeated jobs — a direct design signal.
 
 ## Decision
 
@@ -19,7 +19,7 @@ Key findings: `watchdog` has no built-in time-window debouncing beyond adjacent-
 
 1. A single `Observer` with `schedule(handler, vault_root, recursive=True)`, excluding `.git`/`.obsidian`/plugin-cache subtrees in the handler.
 2. **Light, non-semantic event-layer debouncing**: normalize every raw event to "path P changed" (moves = two path-changed signals), tracked via a per-path last-seen-timestamp map with a short fixed quiet-window (~1–2 seconds, tuned empirically in Phase 1).
-3. The debounce layer's "path settled" callback calls the Huey enqueue function **directly and synchronously** (no asyncio bridge needed, since Huey's SQLite enqueue is just a DB write); `asyncio.run_coroutine_threadsafe`/`loop.call_soon_threadsafe` reserved only for AI_BRAIN's own asyncio-native coordination/status/logging layer.
+3. The debounce layer's "path settled" callback calls the Huey enqueue function **directly and synchronously** (no asyncio bridge needed, since Huey's SQLite enqueue is just a DB write); `asyncio.run_coroutine_threadsafe`/`loop.call_soon_threadsafe` reserved only for ATHENA AI-BRAIN's own asyncio-native coordination/status/logging layer.
 4. **Job-layer idempotency as the real safety net**: every triggered job compares current file mtime/content-hash against indexed state and no-ops if unchanged, uses `huey.lock_task` to prevent concurrent reindexing of the same path, and treats "path X changed" as a trigger to re-derive current truth from disk, never as a diff to apply.
 5. A **periodic/startup reconciliation (full-scan) job**, independent of the event stream, comparing vault-on-disk state vs. index state, as a backstop for events dropped during downtime or queue overflow.
 6. Document a `fs.inotify.max_user_watches` sysctl raise (e.g. to 262144) as a Debian/Kali deployment prerequisite.

@@ -1,7 +1,7 @@
-# AI_BRAIN Runtime Comparison — Python vs TypeScript/Node.js vs Go vs Rust
+# ATHENA AI-BRAIN Runtime Comparison — Python vs TypeScript/Node.js vs Go vs Rust
 
 - **Research date:** 2026-08-22
-- **Researcher:** Claude Code (AI_BRAIN Phase 0)
+- **Researcher:** Claude Code (ATHENA AI-BRAIN Phase 0)
 - **Status:** Comparison synthesis — feeds ADR-0001 (language/runtime selection)
 - **Inputs:** [Python](2026-08-22_runtime_python.md) · [TypeScript/Node.js](2026-08-22_runtime_typescript_nodejs.md) · [Go](2026-08-22_runtime_go.md) · [Rust](2026-08-22_runtime_rust.md)
 
@@ -26,7 +26,7 @@ All four candidates now have an **official, first-party MCP SDK** — this was t
 | 6 | Vector DB clients | **Official**, sync+async, REST+gRPC | **Official**, REST+gRPC | **Official**, gRPC | **Official**, gRPC — arguably best-supported of all |
 | 7 | Async/concurrency | asyncio mature; GIL now optional (3.14) but ecosystem still catching up | Event loop excellent for I/O; CPU-bound needs explicit `worker_threads` | Goroutines/channels — natural, idiomatic fit | tokio mature but steepest learning curve; `dyn`-trait async needs `async-trait` |
 | 8 | Type safety | Gradual (mypy/pyright/ty), enforceable but optional | Strong, enforceable `strict` mode | Static, generics still maturing | **Strongest** — compile-time memory/data-race safety |
-| 9 | Performance | Slowest raw CPU perf, but workload is mostly I/O + native-delegated ML | Good I/O; CPU-bound needs explicit offload | Strong, GC'd, no official benchmark found | **Fastest** (expected), no AI_BRAIN-specific benchmark found |
+| 9 | Performance | Slowest raw CPU perf, but workload is mostly I/O + native-delegated ML | Good I/O; CPU-bound needs explicit offload | Strong, GC'd, no official benchmark found | **Fastest** (expected), no ATHENA AI-BRAIN-specific benchmark found |
 | 10 | Security | Documented safe subprocess pattern; no in-language sandboxing; YAML/pickle traps to avoid | Safe `execFile`/`isomorphic-git` patterns; **real, escalating npm supply-chain risk**; avoid `vm2` | Inherently shell-injection-safe `exec.Command`; official `govulncheck` | **Strongest** — memory safety + structurally safe `Command`/`git2-rs` |
 | 11 | Deployment | No mature single-binary story; `uv`/container-based is fine | SEA single-binary now practical; containers trivial | Static binaries first-class (for pure-Go deps) | Static binaries first-class; smallest containers (musl) |
 | 12 | Linux/Kali compatibility | No issues; PEP 668 venv enforcement is a non-issue with `uv` | No issues | No issues; use go.dev/dl over apt | No issues; use `rustup` over apt |
@@ -36,7 +36,7 @@ All four candidates now have an **official, first-party MCP SDK** — this was t
 
 ## 3. Weighted Discussion
 
-Given AI_BRAIN's master specification, three criteria matter disproportionately more than the others:
+Given ATHENA AI-BRAIN's master specification, three criteria matter disproportionately more than the others:
 
 1. **AI/RAG ecosystem depth (#3)** — because the differentiated engineering work of this project (chunking strategy, hybrid retrieval quality, reranking, multi-provider LLM routing) is iterative and experimental by nature. A thin ecosystem here doesn't just cost initial setup time; it costs ongoing tuning velocity for the project's entire lifetime.
 2. **MCP support (#2)** — now a wash; all four have official SDKs. This removes what might have been a deciding factor and shifts weight back onto the other criteria.
@@ -46,10 +46,10 @@ On these weighted criteria: Rust's security advantage is real but the AI/RAG eco
 
 ## 4. Recommendation
 
-**Python** is the recommended runtime for AI_BRAIN's Phase 1 implementation, on the following basis:
+**Python** is the recommended runtime for ATHENA AI-BRAIN's Phase 1 implementation, on the following basis:
 - It has an official MCP SDK of equal caliber to the other three (the once-differentiating factor is now neutral).
-- It has the deepest, most purpose-built AI/RAG ecosystem against AI_BRAIN's specific stated needs — embeddings, reranking, semantic chunking, multi-provider LLM abstraction, and a first-party async Qdrant client are all covered by mature, well-documented libraries, minimizing hand-rolled integration work.
-- Its performance weaknesses (raw CPU speed, GIL maturity) land almost entirely outside AI_BRAIN's actual workload shape (I/O-bound orchestration + ML inference delegated to native/ONNX backends), per the constitution's "measure before optimizing" principle — this is not a case of ignoring a real risk, it's a case of the risk not applying to the dominant workload.
+- It has the deepest, most purpose-built AI/RAG ecosystem against ATHENA AI-BRAIN's specific stated needs — embeddings, reranking, semantic chunking, multi-provider LLM abstraction, and a first-party async Qdrant client are all covered by mature, well-documented libraries, minimizing hand-rolled integration work.
+- Its performance weaknesses (raw CPU speed, GIL maturity) land almost entirely outside ATHENA AI-BRAIN's actual workload shape (I/O-bound orchestration + ML inference delegated to native/ONNX backends), per the constitution's "measure before optimizing" principle — this is not a case of ignoring a real risk, it's a case of the risk not applying to the dominant workload.
 - Its security gaps (no in-language sandboxing, YAML/pickle deserialization traps) are well-documented, well-understood, and mitigable through disciplined coding patterns and the constitution's mandatory threat-modeling step — not fundamental language-level risks the way, say, Go's cgo/static-binary trade-off is.
 - It best matches a solo/small-team, teaching-oriented, iteration-heavy engineering context, which is the concrete reality of this project per CLAUDE.md.
 

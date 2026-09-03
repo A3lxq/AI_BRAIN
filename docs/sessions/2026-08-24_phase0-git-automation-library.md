@@ -6,7 +6,7 @@
 
 ## Objective
 
-Research and decide AI_BRAIN's Git automation library approach for the knowledge-vault backup/versioning workflow — status detection, safe commits, push policies, rollback/recovery, conflict detection, dry-run, secret scanning — evaluating raw `subprocess`+git CLI, GitPython, pygit2, and Dulwich.
+Research and decide ATHENA AI-BRAIN's Git automation library approach for the knowledge-vault backup/versioning workflow — status detection, safe commits, push policies, rollback/recovery, conflict detection, dry-run, secret scanning — evaluating raw `subprocess`+git CLI, GitPython, pygit2, and Dulwich.
 
 ## Completed Work
 
@@ -18,11 +18,11 @@ Research and decide AI_BRAIN's Git automation library approach for the knowledge
 
 ## Key Decision
 
-AI_BRAIN's Git automation will be a **purpose-built module wrapping the real `git` CLI via `asyncio.create_subprocess_exec`** — argument lists only, `--`/`--end-of-options` insertion before untrusted paths/refs, explicit branch-name allow-listing, a hand-built exit-code/stderr failure taxonomy, dry-run via git's own flags, and `gitleaks` via the `pre-commit` framework for secret scanning. Dulwich (`--pure` mode) is retained only as an optional, non-load-bearing read-side convenience. GitPython is not adopted.
+ATHENA AI-BRAIN's Git automation will be a **purpose-built module wrapping the real `git` CLI via `asyncio.create_subprocess_exec`** — argument lists only, `--`/`--end-of-options` insertion before untrusted paths/refs, explicit branch-name allow-listing, a hand-built exit-code/stderr failure taxonomy, dry-run via git's own flags, and `gitleaks` via the `pre-commit` framework for secret scanning. Dulwich (`--pure` mode) is retained only as an optional, non-load-bearing read-side convenience. GitPython is not adopted.
 
 ## Key Finding
 
-Neither "safer-seeming" library is actually injection-risk-free: **GitPython** has an open 2026 config-injection CVE (CVE-2026-42215) and its own maintainer has declared it in maintenance mode, calling its design "deeply flawed and broken beyond repair." **Dulwich**, despite being pure Python, ships a merge-driver feature that internally uses `subprocess.run(..., shell=True)`, producing a real 2026 CVE (CVE-2026-42563, CVSS 8.8, OS command injection). This confirms the constitution's security-first instinct: enforcing the "never construct shell commands from untrusted text" rule directly in AI_BRAIN's own auditable code is safer than trusting an opaque dependency to have done so.
+Neither "safer-seeming" library is actually injection-risk-free: **GitPython** has an open 2026 config-injection CVE (CVE-2026-42215) and its own maintainer has declared it in maintenance mode, calling its design "deeply flawed and broken beyond repair." **Dulwich**, despite being pure Python, ships a merge-driver feature that internally uses `subprocess.run(..., shell=True)`, producing a real 2026 CVE (CVE-2026-42563, CVSS 8.8, OS command injection). This confirms the constitution's security-first instinct: enforcing the "never construct shell commands from untrusted text" rule directly in ATHENA AI-BRAIN's own auditable code is safer than trusting an opaque dependency to have done so.
 
 ## Files Changed
 
@@ -40,7 +40,7 @@ None — research-only session per CLAUDE.md Phase discipline; no code was writt
 
 ## Unresolved Issues (carried forward as implementation-time checks, not blockers)
 
-- Verify Kali's installed git version supports `--end-of-options` for every subcommand AI_BRAIN needs.
+- Verify Kali's installed git version supports `--end-of-options` for every subcommand ATHENA AI-BRAIN needs.
 - Defer the subprocess wrapper module's exact interface design until the MCP tool contract design settles the operations it needs to expose.
 - Decide gitleaks vs. trufflehog as the primary pre-commit secret scanner.
 

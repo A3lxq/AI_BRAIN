@@ -1,7 +1,7 @@
-# AI_BRAIN — Consolidated Architecture Document
+# ATHENA AI-BRAIN — Consolidated Architecture Document
 
 - **Date:** 2026-08-24
-- **Author:** Claude Code (AI_BRAIN Phase 0)
+- **Author:** Claude Code (ATHENA AI-BRAIN Phase 0)
 - **Status:** Phase 0 exit-criteria deliverable — architecture is documented
 - **Scope:** Synthesizes `00_MASTER_PROJECT_SPECIFICATION.md`, `DEVELOPMENT_CONSTITUTION.md`, ADR-0001 through ADR-0009, and `LONGEVITY_NOTES.md` into one architecture-level reference.
 - **Companion document:** `docs/SECURITY_MODEL.md` (threat model, produced in parallel). Section 5 below establishes *where* trust boundaries sit; it does not enumerate *what can go wrong* at each one — that belongs in the threat model.
@@ -9,9 +9,9 @@
 
 ## 1. System Overview
 
-AI_BRAIN is a vendor-agnostic, event-driven AI Knowledge Operating System built around an Obsidian vault. Its governing philosophy, stated in the master specification, is that **"knowledge should outlive AI models"**: the vault's Markdown notes are the durable asset, and every AI provider, embedding model, or orchestration library in this design is treated as a replaceable component, never as the thing the system is built around.
+ATHENA AI-BRAIN is a vendor-agnostic, event-driven AI Knowledge Operating System built around an Obsidian vault. Its governing philosophy, stated in the master specification, is that **"knowledge should outlive AI models"**: the vault's Markdown notes are the durable asset, and every AI provider, embedding model, or orchestration library in this design is treated as a replaceable component, never as the thing the system is built around.
 
-This produces a hard separation of concerns. The **Obsidian vault** is the sole source of truth for knowledge — it is authoritative, human-owned, and human-readable independent of AI_BRAIN's existence. **AI_BRAIN** is infrastructure that sits beside the vault, never inside it: it observes the vault's filesystem, parses and indexes content, retrieves relevant knowledge on request, performs controlled writes back into the vault, records provenance, and maintains Git-backed version history. AI_BRAIN must never become a second canonical copy of the user's knowledge, and its own repository (code, config, tests, derived state/databases) must remain physically and conceptually separate from the vault repository. This separation is why nearly every accepted ADR independently converges on the same meta-pattern (documented in `LONGEVITY_NOTES.md`): favor thin, replaceable wrappers over durable standards (SQL, git, the Qdrant wire protocol) rather than frameworks that would "own" AI_BRAIN's architecture — LangChain, LlamaIndex, GitPython, and Celery were all rejected substantially on this basis.
+This produces a hard separation of concerns. The **Obsidian vault** is the sole source of truth for knowledge — it is authoritative, human-owned, and human-readable independent of ATHENA AI-BRAIN's existence. **ATHENA AI-BRAIN** is infrastructure that sits beside the vault, never inside it: it observes the vault's filesystem, parses and indexes content, retrieves relevant knowledge on request, performs controlled writes back into the vault, records provenance, and maintains Git-backed version history. ATHENA AI-BRAIN must never become a second canonical copy of the user's knowledge, and its own repository (code, config, tests, derived state/databases) must remain physically and conceptually separate from the vault repository. This separation is why nearly every accepted ADR independently converges on the same meta-pattern (documented in `LONGEVITY_NOTES.md`): favor thin, replaceable wrappers over durable standards (SQL, git, the Qdrant wire protocol) rather than frameworks that would "own" ATHENA AI-BRAIN's architecture — LangChain, LlamaIndex, GitPython, and Celery were all rejected substantially on this basis.
 
 ## 2. Layered Architecture
 
@@ -167,7 +167,7 @@ The following implementation-time decisions are explicitly **not resolved** by a
 
 **Git automation**
 - Whether the subprocess wrapper module's interface should be designed now or deferred until the MCP tool contract settles exact Git operations — the source material notes this was written *before* ADR-0007 existed; ADR-0007 is now accepted, so this dependency is arguably resolved in sequence, but no ADR explicitly closes the loop (ADR-0005). **Flagged as a sequencing note for whoever writes the Git module's own design doc.**
-- Verify Kali's installed git version supports `--end-of-options` for every subcommand AI_BRAIN uses (`checkout`/`reset` only gained it in git 2.43.1) before relying on it as a mitigation (ADR-0005).
+- Verify Kali's installed git version supports `--end-of-options` for every subcommand ATHENA AI-BRAIN uses (`checkout`/`reset` only gained it in git 2.43.1) before relying on it as a mitigation (ADR-0005).
 
 **Qdrant deployment**
 - Should the snapshot-before-upgrade runbook be a standalone documented procedure, or automated as part of the Git-backup Huey job? (ADR-0006) — **Note:** Section 4.4 above shows this decision directly affects how the Git Automation Module and the Job Queue interact; it is unresolved in both ADR-0005/0006/0007 and should be settled before the Git module's design doc is finalized.

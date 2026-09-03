@@ -1,7 +1,7 @@
-# ADR-0007: MCP Tool Contract for AI_BRAIN
+# ADR-0007: MCP Tool Contract for ATHENA AI-BRAIN
 
 - **ID:** ADR-0007
-- **Title:** MCP Tool Contract for AI_BRAIN
+- **Title:** MCP Tool Contract for ATHENA AI-BRAIN
 - **Status:** Accepted
 - **Date proposed:** 2026-08-24
 - **Date accepted:** 2026-08-24
@@ -9,7 +9,7 @@
 
 ## Context
 
-AI_BRAIN's master specification requires one unified MCP server, with internal business logic decoupled from MCP transport and independently testable, exposing tool families: search, read, create, update, move, rename, delete, related, duplicate detection, merge, research, summarize, link, reindex, status, history, provenance, Git operations, diagnostics — with "the final tool contract determined during architecture design." Full findings: [`docs/research/2026-08-24_mcp_tool_contract.md`](../research/2026-08-24_mcp_tool_contract.md).
+ATHENA AI-BRAIN's master specification requires one unified MCP server, with internal business logic decoupled from MCP transport and independently testable, exposing tool families: search, read, create, update, move, rename, delete, related, duplicate detection, merge, research, summarize, link, reindex, status, history, provenance, Git operations, diagnostics — with "the final tool contract determined during architecture design." Full findings: [`docs/research/2026-08-24_mcp_tool_contract.md`](../research/2026-08-24_mcp_tool_contract.md).
 
 Key findings shaping this ADR:
 - The current MCP spec (2026-07-28) is stateless; server-initiated push requests were replaced by Multi Round-Trip Requests (MRTR); the "tasks" concept for long-running operations is an official but optional extension not yet implemented by the Python SDK (v2.0.0).
@@ -19,7 +19,7 @@ Key findings shaping this ADR:
 
 ## Decision
 
-**Accepted:** Adopt the following MCP tool contract for AI_BRAIN's unified server:
+**Accepted:** Adopt the following MCP tool contract for ATHENA AI-BRAIN's unified server:
 
 | Tool / primitive | Family | Classification | Execution | Permission / confirmation notes |
 |---|---|---|---|---|
@@ -58,7 +58,7 @@ The maintainer reviewed the research and comparison and accepted this ADR as pro
 |---|---|
 | Relying on the official tasks extension now | Rejected for now — the Python SDK v2.0.0 does not yet implement it; an interim `job_status`/`job_cancel` shim mirroring the same state vocabulary is adopted instead, to be migrated once SDK support lands. |
 | Separate `note_rename` tool distinct from `note_move` | Rejected — the official filesystem reference server precedent (`move_file` handles both) shows no semantic gain from splitting, and it only adds a decision the model must make for no benefit. |
-| Relying on tool annotations (`destructiveHint`) as the enforcement mechanism for dangerous operations | Rejected — the MCP project's own documentation states annotations are informational only; AI_BRAIN's actual enforcement is server-side validation and MRTR confirmation, independent of what any client chooses to do with annotation hints. |
+| Relying on tool annotations (`destructiveHint`) as the enforcement mechanism for dangerous operations | Rejected — the MCP project's own documentation states annotations are informational only; ATHENA AI-BRAIN's actual enforcement is server-side validation and MRTR confirmation, independent of what any client chooses to do with annotation hints. |
 | Exposing destructive Git operations (force-push, hard reset, branch deletion) via MCP behind a confirmation gate | Rejected — CLAUDE.md rules 22–23 require these to never be triggered automatically; keeping them off the MCP surface entirely is a stronger guarantee than any confirmation gate, which still depends on the calling model correctly relaying a request to a human. |
 | Treating retrieved-content/instruction conflation as solved by MCP's `audience`/`priority` content annotations | Rejected — these are display/inclusion hints for the client application, not a trust or instruction boundary; verified there is no MCP mechanism equivalent to a system/data separation at the content-block level. |
 
@@ -66,8 +66,8 @@ The maintainer reviewed the research and comparison and accepted this ADR as pro
 
 1. **Decoupling is enforced by construction**: every tool is a thin wrapper, directly satisfying the master specification's explicit requirement that internal capabilities be callable/testable without MCP.
 2. **Destructive-operation safety is layered and does not depend on protocol trust**: MRTR confirmation for `note_delete`/`note_merge`, combined with excluding genuinely irreversible Git operations from the MCP surface entirely, follows both the direct prior-art precedent (`obsidian-mcp-server`'s confirmed-delete pattern) and CLAUDE.md's non-negotiable rules.
-3. **The retrieved-content/instruction conflation risk is named explicitly rather than assumed solved.** Since no protocol-level mechanism exists, AI_BRAIN's mitigation is deliberately defense-in-depth at the application layer (server-side validation independent of model intent, confirmation gates, structured content envelopes, optional heuristic scanning, audit logging) — this must be reflected as a residual risk in the security threat model design step, not treated as closed by this ADR.
-4. **The interim tasks-shim keeps AI_BRAIN spec-aligned without blocking on upstream SDK work**, while being explicitly documented as temporary so it doesn't calcify into permanent architecture.
+3. **The retrieved-content/instruction conflation risk is named explicitly rather than assumed solved.** Since no protocol-level mechanism exists, ATHENA AI-BRAIN's mitigation is deliberately defense-in-depth at the application layer (server-side validation independent of model intent, confirmation gates, structured content envelopes, optional heuristic scanning, audit logging) — this must be reflected as a residual risk in the security threat model design step, not treated as closed by this ADR.
+4. **The interim tasks-shim keeps ATHENA AI-BRAIN spec-aligned without blocking on upstream SDK work**, while being explicitly documented as temporary so it doesn't calcify into permanent architecture.
 5. **Prior art directly validated two design choices** (move+rename collapse; cheap always-available dry-run) rather than these being invented from scratch, consistent with the constitution's "research before implementation" article.
 
 ## Consequences

@@ -5,7 +5,7 @@
 
 ## Objective
 
-Begin Phase 0 technology research per `NEXT_SESSION.md`: evaluate the programming language/runtime and foundational development stack for AI_BRAIN, comparing Python, TypeScript/Node.js, Go, and Rust against 15 defined criteria, using current primary documentation.
+Begin Phase 0 technology research per `NEXT_SESSION.md`: evaluate the programming language/runtime and foundational development stack for ATHENA AI-BRAIN, comparing Python, TypeScript/Node.js, Go, and Rust against 15 defined criteria, using current primary documentation.
 
 ## Completed Work
 
@@ -21,7 +21,7 @@ Begin Phase 0 technology research per `NEXT_SESSION.md`: evaluate the programmin
 
 ## Key Decisions
 
-- ADR-0001 (runtime/language selection: Python) was drafted as Proposed, reviewed, and **accepted by the maintainer on 2026-08-22 with no modifications**. Python is now the accepted AI_BRAIN runtime.
+- ADR-0001 (runtime/language selection: Python) was drafted as Proposed, reviewed, and **accepted by the maintainer on 2026-08-22 with no modifications**. Python is now the accepted ATHENA AI-BRAIN runtime.
 
 ## Key Finding
 

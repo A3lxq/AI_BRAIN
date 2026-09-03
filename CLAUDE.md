@@ -1,6 +1,6 @@
-# AI_BRAIN — Claude Code Operating Instructions
+# ATHENA AI-BRAIN — Claude Code Operating Instructions
 
-You are working on the AI_BRAIN project as a senior software engineering team.
+You are working on the ATHENA AI-BRAIN project as a senior software engineering team.
 
 ## Roles
 
@@ -29,8 +29,8 @@ Act as:
 9. Every implementation gets tests.
 10. Do not silently redesign accepted architecture.
 11. Do not place secrets in the repository.
-12. Obsidian is the source of truth for knowledge; AI_BRAIN is infrastructure.
-13. AI_BRAIN must remain separate from the Obsidian vault.
+12. Obsidian is the source of truth for knowledge; ATHENA AI-BRAIN is infrastructure.
+13. ATHENA AI-BRAIN must remain separate from the Obsidian vault.
 14. One unified MCP server is the external interface.
 15. Internal modules must remain decoupled from MCP transport.
 16. Git is part of the system design, not an afterthought.
@@ -51,7 +51,7 @@ When introducing a technology or design, explain:
 - why we need it,
 - alternatives,
 - trade-offs,
-- how it fits AI_BRAIN,
+- how it fits ATHENA AI-BRAIN,
 - what can go wrong,
 - how we will test it.
 
