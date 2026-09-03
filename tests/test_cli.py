@@ -4,21 +4,21 @@ from pathlib import Path
 
 import pytest
 
-from ai_brain.cli import main
+from athena.cli import main
 
 
 @pytest.fixture(autouse=True)
 def _isolated_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AI_BRAIN_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.delenv("AI_BRAIN_VAULT_DIR", raising=False)
-    monkeypatch.delenv("AI_BRAIN_HUEY_SECRET", raising=False)
+    monkeypatch.setenv("ATHENA_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.delenv("ATHENA_VAULT_DIR", raising=False)
+    monkeypatch.delenv("ATHENA_HUEY_SECRET", raising=False)
 
 
 def test_version_command(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main(["version"])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "ai-brain" in captured.out
+    assert "athena" in captured.out
 
 
 def test_doctor_command_runs_and_prints_report(capsys: pytest.CaptureFixture[str]) -> None:
@@ -32,7 +32,7 @@ def test_doctor_command_runs_and_prints_report(capsys: pytest.CaptureFixture[str
 def test_doctor_command_exit_code_reflects_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("AI_BRAIN_VAULT_DIR", str(tmp_path / "nonexistent-vault"))
+    monkeypatch.setenv("ATHENA_VAULT_DIR", str(tmp_path / "nonexistent-vault"))
     exit_code = main(["doctor"])
     assert exit_code == 1
 

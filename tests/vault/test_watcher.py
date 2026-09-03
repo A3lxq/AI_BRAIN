@@ -1,4 +1,4 @@
-"""Tests for ai_brain.vault.watcher.
+"""Tests for athena.vault.watcher.
 
 These are necessarily timing-sensitive integration tests against a real
 `watchdog.observers.Observer` and a real temp directory, not pure unit
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_brain.vault.watcher import VaultWatcher
+from athena.vault.watcher import VaultWatcher
 
 # Short enough to keep the suite fast, long enough that a burst of writes
 # performed in a tight test loop reliably lands inside one debounce window

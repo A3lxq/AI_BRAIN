@@ -1,4 +1,4 @@
-"""Tests for ai_brain.hardening.permissions."""
+"""Tests for athena.hardening.permissions."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_brain.hardening.permissions import (
+from athena.hardening.permissions import (
     PermissionHardeningFailed,
     ensure_private_dir,
     ensure_private_file,
@@ -25,7 +25,7 @@ def restore_umask() -> Iterator[None]:
 
 
 def test_fresh_file_creation_is_0600(tmp_path: Path) -> None:
-    target = tmp_path / "ai_brain.db"
+    target = tmp_path / "athena.db"
     ensure_private_file(target)
     assert target.exists()
     assert target.stat().st_mode & 0o777 == 0o600
@@ -53,7 +53,7 @@ def test_dir_creation_is_umask_independent(tmp_path: Path, restore_umask: None) 
 
 
 def test_file_creation_is_idempotent(tmp_path: Path) -> None:
-    target = tmp_path / "ai_brain.db"
+    target = tmp_path / "athena.db"
     ensure_private_file(target)
     ensure_private_file(target)
     assert target.stat().st_mode & 0o777 == 0o600
@@ -100,7 +100,7 @@ def test_tier_b_chmod_permission_error_is_logged_and_swallowed(
 
     monkeypatch.setattr(os, "chmod", _raise_permission_error)
 
-    with caplog.at_level(logging.CRITICAL, logger="ai_brain.hardening.permissions"):
+    with caplog.at_level(logging.CRITICAL, logger="athena.hardening.permissions"):
         ensure_private_file(target)
 
     critical_records = [r for r in caplog.records if r.levelno == logging.CRITICAL]
@@ -118,7 +118,7 @@ def test_tier_b_mkdir_oserror_is_logged_and_swallowed(
 
     monkeypatch.setattr(Path, "mkdir", _raise_oserror)
 
-    with caplog.at_level(logging.CRITICAL, logger="ai_brain.hardening.permissions"):
+    with caplog.at_level(logging.CRITICAL, logger="athena.hardening.permissions"):
         ensure_private_dir(target)
 
     critical_records = [r for r in caplog.records if r.levelno == logging.CRITICAL]
@@ -129,7 +129,7 @@ def test_tier_b_mkdir_oserror_is_logged_and_swallowed(
 def test_tier_a_bad_mode_after_chmod_raises_hardening_failed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    target = tmp_path / "ai_brain.db"
+    target = tmp_path / "athena.db"
 
     real_chmod = os.chmod
 

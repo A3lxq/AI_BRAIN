@@ -1,4 +1,4 @@
-"""Tests for `ai_brain.db.repository.research_jobs` against a real migrated SQLite file."""
+"""Tests for `athena.db.repository.research_jobs` against a real migrated SQLite file."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 import aiosqlite
 import pytest
 
-from ai_brain.db.migrate import DEFAULT_MIGRATIONS_DIR, apply_pending_migrations
-from ai_brain.db.repository import notes, research_jobs
+from athena.db.migrate import DEFAULT_MIGRATIONS_DIR, apply_pending_migrations
+from athena.db.repository import notes, research_jobs
 
 
 @pytest.fixture

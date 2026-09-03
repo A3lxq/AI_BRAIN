@@ -15,7 +15,7 @@ This decision introduces genuinely new persistent state that no existing ADR's s
 
 ## Decision
 
-**Accepted:** Add one new column to the existing `notes` table and two new tables to ATHENA AI-BRAIN's metadata SQLite database (`ai_brain.db`, per ADR-0004 — not Huey's separate job-store file), as designed in `docs/design/pre-ingestion-secret-scanning.md` §6:
+**Accepted:** Add one new column to the existing `notes` table and two new tables to ATHENA AI-BRAIN's metadata SQLite database (`athena.db`, per ADR-0004 — not Huey's separate job-store file), as designed in `docs/design/pre-ingestion-secret-scanning.md` §6:
 
 ```sql
 -- Added to the existing notes table (docs/DATA_MODEL.md §2.2), orthogonal to
@@ -69,7 +69,7 @@ The maintainer reviewed the design and accepted this ADR as proposed on 2026-08-
 2. **A separate findings table is required by the design's own on-detection behavior** (`docs/design/pre-ingestion-secret-scanning.md` §4.2's confidence-tiered redact-and-flag policy) — a note can have multiple findings at different confidence levels, each independently resolvable, which a single-column status cannot represent.
 3. **`reason` is `NOT NULL` on the allowlist table by deliberate design choice**, not an oversight — per the design doc's §5, "every allowlist decision is a recorded, auditable judgment call (CLAUDE.md rule 24), not a silent toggle." Making the column nullable would silently permit exactly the un-auditable bypass the design was written to prevent.
 4. **Fingerprint-scoping (`secret_hash`/`finding_fingerprint` as the join key, not `note_id`+`line_number`)** is what gives the allowlist its "can't hide a new secret behind an old allowlisted one" property (design doc §5) — a schema keyed on position instead of content would break this guarantee silently if a file were edited.
-5. **This lives in `ai_brain.db`, not Huey's job-store file**, for the same reason ADR-0004 and ADR-0010 already separated those two databases: this is durable, provenance-adjacent knowledge-store state (CLAUDE.md rule 24), not disposable job-queue state.
+5. **This lives in `athena.db`, not Huey's job-store file**, for the same reason ADR-0004 and ADR-0010 already separated those two databases: this is durable, provenance-adjacent knowledge-store state (CLAUDE.md rule 24), not disposable job-queue state.
 
 ## Consequences
 

@@ -8,7 +8,7 @@ ATHENA AI-BRAIN is developed as a standalone software project. The Obsidian vaul
 
 ## How to use this pack
 
-1. Create a new Git repository named `AI_BRAIN`.
+1. Create a new Git repository named `ATHENA_AI_BRAIN`.
 2. Copy this package into the repository.
 3. Open the repository in Claude Code.
 4. Read `CLAUDE.md` first.

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import aiosqlite
 
-from ai_brain.db.repository import chunks as chunks_repo
-from ai_brain.db.repository import notes as notes_repo
-from ai_brain.retrieval.context import build_context
-from ai_brain.retrieval.reranking import RerankedResult
+from athena.db.repository import chunks as chunks_repo
+from athena.db.repository import notes as notes_repo
+from athena.retrieval.context import build_context
+from athena.retrieval.reranking import RerankedResult
 
 
 async def _make_note(conn: aiosqlite.Connection, path: str) -> int:

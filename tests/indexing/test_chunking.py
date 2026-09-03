@@ -1,4 +1,4 @@
-"""Tests for `ai_brain.indexing.chunking`.
+"""Tests for `athena.indexing.chunking`.
 
 Turn-header fixtures mirror `docs/DATA_MODEL.md` §0's real vault shapes
 (also used by `tests/safety/test_content.py`/`tests/vault/test_ingest.py`):
@@ -13,7 +13,7 @@ import re
 
 import pytest
 
-from ai_brain.indexing.chunking import Chunk, chunk_note
+from athena.indexing.chunking import Chunk, chunk_note
 
 _HEADER_RE = re.compile(r"^(#{1,6} .+)$", re.MULTILINE)
 
@@ -85,7 +85,7 @@ def _chunk_start_positions(chunks: list[Chunk]) -> list[int]:
 class TestTurnHeaderBoundaries:
     """The empirical test flagged by docs/design/indexing-pipeline.md §2.2/§5/§7/§9:
     does chonkie's hand-built heading-aware RecursiveRules actually split at
-    AI_BRAIN's real turn-header shapes, or does a custom pre-splitter become a
+    ATHENA AI-BRAIN's real turn-header shapes, or does a custom pre-splitter become a
     required follow-up? Overlap is disabled here (chunk_overlap=0) so chunk
     boundaries reflect chonkie's raw structural splitting, not the separate
     overlap post-processing pass.
@@ -207,7 +207,7 @@ class TestOversizedChunkTruncation:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         body = "y" * 30_000
-        with caplog.at_level(logging.WARNING, logger="ai_brain.indexing.chunking"):
+        with caplog.at_level(logging.WARNING, logger="athena.indexing.chunking"):
             chunk_note(body, chunk_size=20_000, chunk_overlap=0, max_tokens=8192)
         assert any(r.levelno == logging.WARNING for r in caplog.records)
 

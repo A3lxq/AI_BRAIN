@@ -56,16 +56,16 @@ implementation" rule, since Phase 0's research for these libraries was from
   CVE). All four ship `py.typed` — no mypy overrides needed.
 - Migration 0004 (`notes.index_state`/`last_index_error`) — resolves the
   item Phase 2's own design doc deliberately deferred.
-- `ai_brain.config`: `AI_BRAIN_QDRANT_URL`.
-- `ai_brain.db.repository.notes`: `get_by_id`, `mark_indexed`,
+- `athena.config`: `ATHENA_QDRANT_URL`.
+- `athena.db.repository.notes`: `get_by_id`, `mark_indexed`,
   `mark_index_failed`, `list_ids_needing_index`.
-- `ai_brain.db.repository.chunks` (new module) — Phase 2's repository task
+- `athena.db.repository.chunks` (new module) — Phase 2's repository task
   explicitly excluded this table since it belongs to Phase 3.
 
 ### Parallel agents (narrow, non-overlapping scope, each required to
 install/test/mypy/ruff itself before reporting)
 
-1. **Chunking** (`ai_brain/indexing/chunking.py`) — verified `chonkie`
+1. **Chunking** (`athena/indexing/chunking.py`) — verified `chonkie`
    1.7.0's real API directly (no `chunk_size`/overlap parameter on
    `RecursiveChunker` — overlap is a separate `OverlapRefinery` pass;
    `RecursiveLevel.delimiters` match as literal substrings, not regex).
@@ -75,14 +75,14 @@ install/test/mypy/ruff itself before reporting)
    pre-splitter needed. Honestly documented one real limitation found:
    code fences longer than one chunk's worth of text are not protected from
    mid-fence splitting (chonkie has no fence-boundary awareness at all).
-2. **Embedding** (`ai_brain/indexing/embedding.py`) — resolved and pinned a
+2. **Embedding** (`athena/indexing/embedding.py`) — resolved and pinned a
    real BGE-M3 revision hash via the HuggingFace Hub API, cross-checked two
    ways. **Real gap found and honestly documented, not faked**: `fastembed`
    has no revision-pinning mechanism whatsoever for miniCOIL, confirmed by
    reading its installed source directly (`MiniCOIL.__init__` doesn't
    forward `**kwargs` to the download path at all). `SECURITY_MODEL.md` P1
    item 15 stays open for the sparse leg specifically.
-3. **Qdrant store** (`ai_brain/indexing/qdrant_store.py`) — atomic,
+3. **Qdrant store** (`athena/indexing/qdrant_store.py`) — atomic,
    lock-guarded alias mutation (resolves P1 item 11), IDF-modifier sparse
    config, payload indexes. Integration tests needing a real server written
    correctly and marked `skip` (not `xfail`, not omitted), citing the
@@ -104,26 +104,26 @@ install/test/mypy/ruff itself before reporting)
   or deletes by it, only by `note_id`), in exchange for the correctness
   guarantee. Caught by writing the failure-path test and having it fail
   first, not by inspection alone.
-- `ai_brain/indexing/index_note.py` — the idempotent per-note job. Re-runs
+- `athena/indexing/index_note.py` — the idempotent per-note job. Re-runs
   the identical read → secret-scan → redact → parse pipeline `ingest_note`
   used (including applying the same allowlist), rather than trusting a
   cached copy.
-- `ai_brain/worker.py` — a lazy, process-lifetime `QdrantClient` singleton;
+- `athena/worker.py` — a lazy, process-lifetime `QdrantClient` singleton;
   `index_note_task` chained after `ingest_note_task`'s success via a normal
   (queued, not `call_local`) invocation; `run_index_bootstrap` for the new
   CLI command.
-- `ai_brain/vault/bootstrap.py` / `reconcile.py` — both gained an optional
+- `athena/vault/bootstrap.py` / `reconcile.py` — both gained an optional
   `qdrant_client` parameter; when supplied, chain directly into
   `index_note()` after each successful ingest, catching (not propagating)
   per-note indexing failures so one bad note or an unreachable Qdrant server
   never aborts the rest of a bootstrap/reconciliation run.
-- `ai_brain/worker.py`'s `run_bootstrap`/`run_reconcile` degrade gracefully
+- `athena/worker.py`'s `run_bootstrap`/`run_reconcile` degrade gracefully
   (log a warning, proceed metadata-only) if Qdrant is unreachable;
   `run_index_bootstrap` does not, since indexing is its entire purpose —
   verified live, and the CLI wraps it in a clean error message rather than
   letting a raw traceback leak (a real UX bug caught during live
   verification and fixed before this session ended).
-- CLI: `ai-brain index bootstrap`. Doctor: `qdrant_reachable` (warn, not
+- CLI: `athena index bootstrap`. Doctor: `qdrant_reachable` (warn, not
   fail, when unreachable — mirrors `bwrap_available`/`docker_available`'s
   own posture for optional external dependencies).
 
@@ -133,12 +133,12 @@ install/test/mypy/ruff itself before reporting)
   `skip`-marked (not silently omitted) pending Docker/Qdrant access
 - `mypy --strict` across all of `src/`: clean
 - `ruff check`: clean across the whole repo
-- Live end-to-end verification: `ai-brain migrate` (4 migrations) →
-  `ai-brain doctor` (correctly reports `qdrant_reachable: warn`, connection
-  refused, everything else `ok`) → `ai-brain ingest bootstrap` against a
+- Live end-to-end verification: `athena migrate` (4 migrations) →
+  `athena doctor` (correctly reports `qdrant_reachable: warn`, connection
+  refused, everything else `ok`) → `athena ingest bootstrap` against a
   real ChatGPT-style fixture note (gracefully degraded to metadata-only,
   logged a clear warning, confirmed via direct DB inspection:
-  `index_state='stale'`, zero orphaned `chunks` rows) → `ai-brain index
+  `index_state='stale'`, zero orphaned `chunks` rows) → `athena index
   bootstrap` (failed cleanly with a readable error once the CLI's error
   handling was fixed, rather than a raw traceback)
 

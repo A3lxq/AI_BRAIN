@@ -114,9 +114,9 @@ Both processes need nearly identical filesystem access because both call into th
 - **MCP server**: primarily a request/response process, no periodic-job concerns.
 - **Huey worker**: needs long-run stability (`Restart=on-failure`), and per ADR-0002's periodic Git-backup job, needs the same `git` subprocess access as the MCP server.
 
-In practice these directive blocks are ~90% identical and would typically be factored into a systemd template unit (`ai-brain@.service`) during implementation. Two full files are shown here for clarity of review.
+In practice these directive blocks are ~90% identical and would typically be factored into a systemd template unit (`athena@.service`) during implementation. Two full files are shown here for clarity of review.
 
-**`ai-brain-huey-worker.service`** (installed as `~/.config/systemd/user/ai-brain-huey-worker.service`):
+**`athena-huey-worker.service`** (installed as `~/.config/systemd/user/athena-huey-worker.service`):
 
 ```ini
 [Unit]
@@ -126,19 +126,19 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/ai-brain/.venv/bin/python -m ai_brain.worker
+ExecStart=%h/athena/.venv/bin/python -m athena.worker
 Restart=on-failure
 RestartSec=5
 
 # --- Filesystem sandboxing ---
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=%h/ObsidianVault %h/.local/state/ai-brain
+ReadWritePaths=%h/ObsidianVault %h/.local/state/athena
 ReadOnlyPaths=%h/.cache/huggingface
 PrivateTmp=yes
 PrivateDevices=yes
-StateDirectory=ai-brain
-LogsDirectory=ai-brain
+StateDirectory=athena
+LogsDirectory=athena
 
 # --- Privilege / capability restriction ---
 NoNewPrivileges=yes
@@ -175,18 +175,18 @@ WantedBy=default.target
 
 ```bash
 #!/usr/bin/env bash
-# ai-brain-mcp-launch.sh — sandboxed launcher for ATHENA AI-BRAIN's stdio MCP server.
+# athena-mcp-launch.sh — sandboxed launcher for ATHENA AI-BRAIN's stdio MCP server.
 set -euo pipefail
 
-VAULT_DIR="${AI_BRAIN_VAULT_DIR:?set AI_BRAIN_VAULT_DIR}"
-STATE_DIR="${HOME}/.local/state/ai-brain"
+VAULT_DIR="${ATHENA_VAULT_DIR:?set ATHENA_VAULT_DIR}"
+STATE_DIR="${HOME}/.local/state/athena"
 MODEL_CACHE="${HOME}/.cache/huggingface"
-VENV="${HOME}/ai-brain/.venv"
+VENV="${HOME}/athena/.venv"
 
 exec bwrap \
   --clearenv \
   --setenv PATH "/usr/bin:/bin" \
-  --setenv AI_BRAIN_VAULT_DIR "$VAULT_DIR" \
+  --setenv ATHENA_VAULT_DIR "$VAULT_DIR" \
   --unshare-pid \
   --unshare-uts \
   --unshare-cgroup \
@@ -209,7 +209,7 @@ exec bwrap \
   --dev /dev \
   --tmpfs /tmp \
   --share-net \
-  -- "$VENV/bin/python" -m ai_brain.mcp_server
+  -- "$VENV/bin/python" -m athena.mcp_server
 ```
 
 Purpose of the non-obvious flags:
@@ -247,7 +247,7 @@ The mechanism, stated precisely:
 
 | Failure scenario | Symptom | Diagnosis path |
 |---|---|---|
-| `ReadWritePaths=` doesn't cover a path ATHENA AI-BRAIN legitimately needs | `PermissionError`/`OSError` from Python; `git` subprocess exits nonzero with an opaque error | `journalctl --user -u ai-brain-huey-worker.service -e`; `systemd-analyze security` re-confirms which directive is active; extend `system_diagnostics` (ADR-0007) with a "sandbox self-test" — canary read/write against each configured path at startup |
+| `ReadWritePaths=` doesn't cover a path ATHENA AI-BRAIN legitimately needs | `PermissionError`/`OSError` from Python; `git` subprocess exits nonzero with an opaque error | `journalctl --user -u athena-huey-worker.service -e`; `systemd-analyze security` re-confirms which directive is active; extend `system_diagnostics` (ADR-0007) with a "sandbox self-test" — canary read/write against each configured path at startup |
 | `SystemCallFilter=@system-service` is missing a syscall a dependency update starts using | With `SystemCallErrorNumber=EPERM`: a catchable `OSError`. Without it: silent `SIGSYS`-termination, no application-level log line | This is exactly why `SystemCallErrorNumber=EPERM` is specified — always keep it during any dependency upgrade window |
 | `MemoryDenyWriteExecute=yes` breaks a JIT-compiling ML backend | Crash or `SIGSEGV`/mmap failure specifically during embedding-model load or first inference | Bisect by toggling the directive off; if confirmed, omit rather than degrading the embedding pipeline |
 | `ProtectHome=yes` blocks something outside `ReadWritePaths=`/`ReadOnlyPaths=` (locale files, fontconfig cache) | Opaque import-time or first-use failure | `systemd-analyze security` plus a first-run smoke test covering cold-start of every dependency |
@@ -270,7 +270,7 @@ The mechanism, stated precisely:
 
 1. **Cold-start smoke test**: start the sandboxed Huey worker unit and MCP server wrapper from a clean environment; confirm both reach a ready state.
 2. **Full legitimate-operation pass**: run each of ADR-0007's mutating tools against a real (throwaway/test) vault under the sandbox, confirming success — exercises `ReadWritePaths=`, the git-subprocess inheritance path (§4), and embedding inference (exercising the `MemoryDenyWriteExecute=` risk) in one pass.
-3. **`systemd-analyze security ai-brain-huey-worker.service`** run as a regression check pre-deployment — track the exposure score over time; a regression should require justification.
+3. **`systemd-analyze security athena-huey-worker.service`** run as a regression check pre-deployment — track the exposure score over time; a regression should require justification.
 
 ### 7.2 Negative-path tests (does it actually contain a bypass)
 

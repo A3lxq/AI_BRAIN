@@ -1,1 +1,1 @@
-"""Shared pytest fixtures for the AI_BRAIN test suite."""
+"""Shared pytest fixtures for the ATHENA AI-BRAIN test suite."""

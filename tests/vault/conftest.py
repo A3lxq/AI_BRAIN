@@ -7,13 +7,13 @@ import aiosqlite
 import pytest
 from huey import SqliteHuey
 
-from ai_brain.db.migrate import DEFAULT_MIGRATIONS_DIR, apply_pending_migrations
-from ai_brain.safety.paths import VaultRoot
+from athena.db.migrate import DEFAULT_MIGRATIONS_DIR, apply_pending_migrations
+from athena.safety.paths import VaultRoot
 
 
 @pytest.fixture
 async def conn(tmp_path: Path) -> AsyncIterator[aiosqlite.Connection]:
-    connection = await aiosqlite.connect(tmp_path / "ai_brain.db")
+    connection = await aiosqlite.connect(tmp_path / "athena.db")
     await apply_pending_migrations(connection, DEFAULT_MIGRATIONS_DIR)
     yield connection
     await connection.close()
@@ -24,7 +24,7 @@ def huey(tmp_path: Path) -> SqliteHuey:
     # Huey's SQLite storage opens a fresh connection per call -- ":memory:"
     # would give each call an empty, table-less database (verified
     # empirically). A real temp file is required.
-    return SqliteHuey(name="ai-brain-test", filename=str(tmp_path / "huey.db"))
+    return SqliteHuey(name="athena-test", filename=str(tmp_path / "huey.db"))
 
 
 @pytest.fixture

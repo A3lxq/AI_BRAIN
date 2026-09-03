@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import aiosqlite
 
-from ai_brain.db.repository import notes as notes_repo
-from ai_brain.vault import lifecycle
+from athena.db.repository import notes as notes_repo
+from athena.vault import lifecycle
 
 
 async def test_create_note_defaults_to_draft_and_records_transition(

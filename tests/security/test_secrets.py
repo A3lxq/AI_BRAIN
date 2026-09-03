@@ -1,4 +1,4 @@
-"""Tests for `ai_brain.security.secrets` — the pre-ingestion secret scanner.
+"""Tests for `athena.security.secrets` — the pre-ingestion secret scanner.
 
 These tests run the real `detect-secrets` scanner against real fixture
 files written to `tmp_path`; the scanner library itself is never mocked,
@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from detect_secrets.core.secrets_collection import SecretsCollection
 
-from ai_brain.security.secrets import (
+from athena.security.secrets import (
     SecretFinding,
     SecretScanResult,
     redact_high_confidence_spans,

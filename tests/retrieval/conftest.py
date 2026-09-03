@@ -6,12 +6,12 @@ from pathlib import Path
 import aiosqlite
 import pytest
 
-from ai_brain.db.migrate import DEFAULT_MIGRATIONS_DIR, apply_pending_migrations
+from athena.db.migrate import DEFAULT_MIGRATIONS_DIR, apply_pending_migrations
 
 
 @pytest.fixture
 async def conn(tmp_path: Path) -> AsyncIterator[aiosqlite.Connection]:
-    connection = await aiosqlite.connect(tmp_path / "ai_brain.db")
+    connection = await aiosqlite.connect(tmp_path / "athena.db")
     await apply_pending_migrations(connection, DEFAULT_MIGRATIONS_DIR)
     yield connection
     await connection.close()

@@ -12,7 +12,7 @@ The **Vault Safety Boundary** is a single, shared, dependency-injected module th
 1. *"Is this filesystem path safe to touch, given the operation the caller intends?"* — the **path safety** concern.
 2. *"Can this note's raw text be parsed into metadata + body without ever executing untrusted content or crashing on adversarial/malformed input?"* — the **content safety** concern.
 
-It lives as its own package (`ai_brain/safety/`, submodules `paths.py` and `content.py`), architecturally beneath the business-logic layer (`ARCHITECTURE.md` layer 2) and importable by every layer that touches vault paths or vault text: the MCP tool wrappers, the internal business-logic functions they call, the Git Automation Module (ADR-0005), the Vault Watcher/Event Debouncer (ADR-0009), and the reconciliation job.
+It lives as its own package (`athena/safety/`, submodules `paths.py` and `content.py`), architecturally beneath the business-logic layer (`ARCHITECTURE.md` layer 2) and importable by every layer that touches vault paths or vault text: the MCP tool wrappers, the internal business-logic functions they call, the Git Automation Module (ADR-0005), the Vault Watcher/Event Debouncer (ADR-0009), and the reconciliation job.
 
 **Explicitly NOT this module's job** (so scope doesn't creep):
 
@@ -25,7 +25,7 @@ It lives as its own package (`ai_brain/safety/`, submodules `paths.py` and `cont
 
 Concretely, the module performs these checks, and only these:
 
-**Path safety (`ai_brain.safety.paths`):**
+**Path safety (`athena.safety.paths`):**
 - Canonicalizes the configured vault root exactly once, at process startup, to an absolute, fully-resolved `Path`.
 - For every incoming path-shaped input from any entry point, resolves it and verifies the vault root is an ancestor of the result (never a string-prefix comparison).
 - Detects and rejects any path traversal (`../`) that would escape the vault root.
@@ -33,7 +33,7 @@ Concretely, the module performs these checks, and only these:
 - Handles the existence/non-existence semantics correctly per operation type (CREATE vs. READ/UPDATE/DELETE — see §5).
 - Rejects structurally invalid path input (embedded NUL bytes, empty strings, the vault root itself as a target).
 
-**Content safety (`ai_brain.safety.content`):**
+**Content safety (`athena.safety.content`):**
 - Never calls `yaml.load()` unguarded, directly or indirectly, on vault content.
 - Bounds the size of any YAML frontmatter block *before* it reaches a YAML parser at all (a gap `python-frontmatter` itself does not close — see §4).
 - Classifies incoming note text into one of three shapes per `DATA_MODEL.md` §0 — real frontmatter, legacy chat-export, or plain/reference material — and parses each safely without assuming any of the other two shapes.
@@ -147,8 +147,8 @@ def parse_note_safely(
 
 A design doc that only states the interface and trusts every future call site to use it correctly will drift. Four concrete mechanisms, in decreasing order of strength:
 
-1. **Type-level friction.** `SafeVaultPath` is constructible only inside `ai_brain/safety/paths.py` (a private constructor, not a public `NewType`/dataclass anyone can instantiate). Every business-logic function that touches the filesystem declares its path parameter as `SafeVaultPath`, not `str`/`Path` — a caller that skipped `resolve_vault_path()` gets a type error, not a runtime surprise, wherever mypy/pyright actually runs.
-2. **Structural CI check (grep/AST-based)**, mirroring the precedent `docs/TESTING_STRATEGY.md` already sets for `shell=True` and the pickle-serializer check: fail the build if any module outside `ai_brain/safety/` calls `Path.resolve(`, `os.path.realpath(`, or opens/writes a file via a raw path that didn't originate from a `SafeVaultPath`. This is the same "grep-based CI check" pattern already accepted for ADR-0005's argument-injection defenses — no new tooling class is introduced.
+1. **Type-level friction.** `SafeVaultPath` is constructible only inside `athena/safety/paths.py` (a private constructor, not a public `NewType`/dataclass anyone can instantiate). Every business-logic function that touches the filesystem declares its path parameter as `SafeVaultPath`, not `str`/`Path` — a caller that skipped `resolve_vault_path()` gets a type error, not a runtime surprise, wherever mypy/pyright actually runs.
+2. **Structural CI check (grep/AST-based)**, mirroring the precedent `docs/TESTING_STRATEGY.md` already sets for `shell=True` and the pickle-serializer check: fail the build if any module outside `athena/safety/` calls `Path.resolve(`, `os.path.realpath(`, or opens/writes a file via a raw path that didn't originate from a `SafeVaultPath`. This is the same "grep-based CI check" pattern already accepted for ADR-0005's argument-injection defenses — no new tooling class is introduced.
 3. **An enumeration tripwire test.** A test walks the MCP tool registry (ADR-0007) and the Git module's exported function list and asserts every function whose signature accepts a path-shaped parameter appears in an explicit allow-list file that documents which `PathMode` it uses and where it calls `resolve_vault_path`. Adding a new path-accepting tool without updating that file fails CI — this is a deliberate "you must touch this file" trip-wire, not a one-time check.
 4. **Code-review checklist item** (documented here, referenced from `CLAUDE.md`/`ARCHITECTURE.md`): *"Any new function accepting a path parameter representing vault content must accept `SafeVaultPath`, not `str`/`Path`, and must not call `Path.resolve()`/`os.path.realpath()` itself."*
 
@@ -191,7 +191,7 @@ None of these four is airtight alone; together they make reimplementation a visi
 
 **Symlinks within the vault — reasoned recommendation: refuse, don't follow.** Two distinct in-vault symlink scenarios exist: a symlink escaping the vault (already covered above) and a symlink whose target resolves to a *different but still in-vault* location. The second case passes a naive ancestor check (the resolved path is inside `vault_root`) but should still be rejected, for reasons specific to this system's own data model rather than abstract caution:
 
-- `notes.path` is the canonical, `UNIQUE` identifier in `ai_brain.db` (`DATA_MODEL.md` §2.2). If a symlink lets two distinct vault-relative paths resolve to the same underlying content, the same file could be indexed twice under two different `notes.path` values — directly undermining the duplicate-detection subsystem's own assumptions and doubling embedding cost for no benefit.
+- `notes.path` is the canonical, `UNIQUE` identifier in `athena.db` (`DATA_MODEL.md` §2.2). If a symlink lets two distinct vault-relative paths resolve to the same underlying content, the same file could be indexed twice under two different `notes.path` values — directly undermining the duplicate-detection subsystem's own assumptions and doubling embedding cost for no benefit.
 - The Git Automation Module (ADR-0005) operates on the *literal* pathspec it's given, not the symlink-resolved target. If the indexer silently follows a symlink to its real target while Git commits the symlink path, SQLite/Qdrant's notion of "what changed" and Git's commit history diverge — a provenance-integrity break that directly violates CLAUDE.md rule 24.
 - `DATA_MODEL.md` §0's folder-name-based provenance inference (`CHAT_GPT` → `openai`, etc.) assumes a note's folder location *is* its provenance signal. A symlink from one AI-origin folder into another (or from a private note into an AI-origin folder) would silently misclassify that note's `origin`/`provider` fields with no content-level indication anything unusual happened.
 - Both the watcher's `recursive=True` observer and the reconciliation job's directory walk risk infinite loops on a symlink cycle if links are followed — a concrete, self-inflicted DoS vector, not merely a security abstraction.
@@ -247,7 +247,7 @@ This extends, rather than duplicates, `docs/TESTING_STRATEGY.md`'s existing "sha
 
 **Structural/CI checks** (extending the precedent already set for `shell=True`/pickle-serializer checks):
 
-- fail CI if any module outside `ai_brain/safety/` calls `Path.resolve(` or `os.path.realpath(` directly
+- fail CI if any module outside `athena/safety/` calls `Path.resolve(` or `os.path.realpath(` directly
 - fail CI if any `frontmatter.load`/`frontmatter.loads` call site passes a `Loader=` kwarg other than `SafeLoader`/`CSafeLoader`
 - fail CI if any `yaml.load(` call anywhere lacks `Loader=yaml.SafeLoader` (cross-referencing `docs/TESTING_STRATEGY.md`'s existing stated check, not duplicating it)
 - the enumeration tripwire test described in §3.3: every path-accepting MCP tool and Git-module function must appear in the allow-list file documenting its `PathMode` and call site — a new path-accepting entry point that skips this file fails CI

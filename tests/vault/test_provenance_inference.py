@@ -1,4 +1,4 @@
-"""Tests for `ai_brain.vault.provenance_inference`.
+"""Tests for `athena.vault.provenance_inference`.
 
 Fixtures mirror `docs/DATA_MODEL.md` §0's real vault folder layout
 (`CHAT_GPT`/`CLAUDE`/`GROK_GPT`/`QWEN` as AI-origin folders, an
@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from ai_brain.safety.content import NoteShape
-from ai_brain.vault.provenance_inference import infer_origin, infer_provider
+from athena.safety.content import NoteShape
+from athena.vault.provenance_inference import infer_origin, infer_provider
 
 
 class TestInferOriginKnownFoldersChatExport:

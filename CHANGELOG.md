@@ -40,54 +40,56 @@
 - `docs/design/storage-runtime-hardening.md`: Huey serializer startup assertion + SQLite/Qdrant file-permission hardening design (P0 #4, #5).
 - `docs/design/pre-ingestion-secret-scanning.md`: `detect-secrets`-based pre-ingestion scanner design (P0 #6).
 - ADR-0011: secret-scan schema (`notes.secret_scan_status`, `note_secret_findings`, `secret_scan_allowlist`), status Accepted 2026-08-27 (`docs/adr/0011-secret-scan-schema.md`).
-- Phase 1 foundational scaffolding: `src/ai_brain` package, `pyproject.toml` (hatchling build backend, mypy --strict, ruff), `ai_brain.config`, `ai_brain.logging_setup` (structured JSON logging), `ai_brain.cli` (`ai-brain doctor` / `ai-brain version`), `ai_brain.diagnostics` (doctor report wiring together all P0 checks).
-- `ai_brain.safety.paths` / `ai_brain.safety.content`: implementation of the vault safety boundary design (P0 #1, #3) — `SafeVaultPath`, `resolve_vault_path()`, `resolve_vault_pathspec()`, `parse_note_safely()`.
-- `ai_brain.hardening.serializer` / `ai_brain.hardening.permissions`: implementation of the storage/runtime hardening design (P0 #4, #5) — `assert_safe_job_serializer()`, `ensure_private_file()`, `ensure_private_dir()`.
-- `ai_brain.security.secrets`: implementation of the pre-ingestion secret scanning design (P0 #6) — `scan_note_for_secrets()`, `redact_high_confidence_spans()`, using `detect-secrets`.
-- `deployment/systemd/ai-brain-huey-worker.service`, `deployment/bubblewrap/ai-brain-mcp-launch.sh`, `deployment/README.md`: implementation of the OS-level process sandboxing design (P0 #2), verified against this environment's real systemd 259 and bubblewrap 0.11.1; both configs explicitly marked not-deployment-ready pending entry-point modules and a real install path.
+- Phase 1 foundational scaffolding: `src/athena` package, `pyproject.toml` (hatchling build backend, mypy --strict, ruff), `athena.config`, `athena.logging_setup` (structured JSON logging), `athena.cli` (`athena doctor` / `athena version`), `athena.diagnostics` (doctor report wiring together all P0 checks).
+- `athena.safety.paths` / `athena.safety.content`: implementation of the vault safety boundary design (P0 #1, #3) — `SafeVaultPath`, `resolve_vault_path()`, `resolve_vault_pathspec()`, `parse_note_safely()`.
+- `athena.hardening.serializer` / `athena.hardening.permissions`: implementation of the storage/runtime hardening design (P0 #4, #5) — `assert_safe_job_serializer()`, `ensure_private_file()`, `ensure_private_dir()`.
+- `athena.security.secrets`: implementation of the pre-ingestion secret scanning design (P0 #6) — `scan_note_for_secrets()`, `redact_high_confidence_spans()`, using `detect-secrets`.
+- `deployment/systemd/athena-huey-worker.service`, `deployment/bubblewrap/athena-mcp-launch.sh`, `deployment/README.md`: implementation of the OS-level process sandboxing design (P0 #2), verified against this environment's real systemd 259 and bubblewrap 0.11.1; both configs explicitly marked not-deployment-ready pending entry-point modules and a real install path.
 - Test suite: 87 tests across `tests/safety/`, `tests/hardening/`, `tests/security/`, `tests/test_diagnostics.py`, `tests/test_cli.py` — all passing; mypy --strict clean; ruff clean.
-- Phase 1 work committed and pushed to `github.com/A3lxq/AI_BRAIN` `main`, merged with the repository's pre-existing history.
+- Phase 1 work committed and pushed to `github.com/A3lxq/ATHENA_AI_BRAIN` `main`, merged with the repository's pre-existing history.
 - `docs/design/migration-runner-and-vault-ingestion.md`: design for the SQLite migration runner, a minimal repository layer, and the vault ingestion pipeline (ADR-0004/ADR-0009/ADR-0010/ADR-0011), implementing already-accepted decisions rather than making new ones.
-- `ai_brain.db.migrate`: SQLite migration runner (`PRAGMA user_version` + numbered `.sql` files) with real atomic rollback-on-failure and checksum-drift detection; 3 numbered migrations apply the full `DATA_MODEL.md`/`EVENT_MODEL.md`/ADR-0011 schema for the first time.
-- `ai_brain.db.repository.{notes,tags,provenance,lifecycle,events,research_jobs,secret_findings}`: typed async repository functions over the migrated schema.
-- `ai_brain.vault.provenance_inference`: folder-name/content-shape → `origin`/`provider` inference implementing `DATA_MODEL.md` §0's rules.
-- `ai_brain.vault.watcher`: real filesystem watcher/debounce layer over `watchdog` 6.0.0 (ADR-0009).
-- `ai_brain.vault.lifecycle`: the note lifecycle service (`create_note`/`update_note_content`/`move_note`/`delete_note`/`transition_status`).
-- `ai_brain.vault.ingest`: the idempotent per-path ingestion job — metadata, provenance, lifecycle, and secret-scan-finding persistence (ADR-0011's schema now has a real caller), move/delete detection.
-- `ai_brain.vault.bootstrap` / `ai_brain.vault.reconcile`: one-time full-vault ingestion and the periodic/startup reconciliation backstop.
-- `ai_brain.worker`: the Huey entry point (`huey_consumer.py ai_brain.worker.huey`), resolving the systemd unit's placeholder from Phase 1.
-- CLI: `ai-brain migrate`, `ai-brain ingest bootstrap`, `ai-brain ingest reconcile`; `ai-brain doctor` gained a `schema_version` check.
+- `athena.db.migrate`: SQLite migration runner (`PRAGMA user_version` + numbered `.sql` files) with real atomic rollback-on-failure and checksum-drift detection; 3 numbered migrations apply the full `DATA_MODEL.md`/`EVENT_MODEL.md`/ADR-0011 schema for the first time.
+- `athena.db.repository.{notes,tags,provenance,lifecycle,events,research_jobs,secret_findings}`: typed async repository functions over the migrated schema.
+- `athena.vault.provenance_inference`: folder-name/content-shape → `origin`/`provider` inference implementing `DATA_MODEL.md` §0's rules.
+- `athena.vault.watcher`: real filesystem watcher/debounce layer over `watchdog` 6.0.0 (ADR-0009).
+- `athena.vault.lifecycle`: the note lifecycle service (`create_note`/`update_note_content`/`move_note`/`delete_note`/`transition_status`).
+- `athena.vault.ingest`: the idempotent per-path ingestion job — metadata, provenance, lifecycle, and secret-scan-finding persistence (ADR-0011's schema now has a real caller), move/delete detection.
+- `athena.vault.bootstrap` / `athena.vault.reconcile`: one-time full-vault ingestion and the periodic/startup reconciliation backstop.
+- `athena.worker`: the Huey entry point (`huey_consumer.py athena.worker.huey`), resolving the systemd unit's placeholder from Phase 1.
+- CLI: `athena migrate`, `athena ingest bootstrap`, `athena ingest reconcile`; `athena doctor` gained a `schema_version` check.
 - Test suite: 211 tests total (124 new this session) — all passing; mypy --strict clean; ruff clean. Live end-to-end CLI verification performed against a 3-note fixture vault covering all three real content shapes.
-- Phase 2 work committed and pushed to `github.com/A3lxq/AI_BRAIN` `main` (`aa76ce7`).
+- Phase 2 work committed and pushed to `github.com/A3lxq/ATHENA_AI_BRAIN` `main` (`aa76ce7`).
 - `docs/design/indexing-pipeline.md`: design for chunking, embedding, Qdrant store, and the `index_note` job (ADR-0003/0006/0008), including a critical `sentence-transformers` CVE (CVE-2026-68770) found during research and resolved by direct GitHub source verification against the exact pre-fix and post-fix versions.
-- `ai_brain.indexing.chunking`: structure-aware Markdown chunking via `chonkie`, hand-built heading-aware rules (never `from_recipe()`, which makes a live network call). Empirically confirmed to split on ATHENA AI-BRAIN's real conversational-turn headers.
-- `ai_brain.indexing.embedding`: dense (`BAAI/bge-m3`, revision-pinned) and sparse (`Qdrant/minicoil-v1` via `fastembed`, no pinning mechanism exists — documented gap) embedding generation.
-- `ai_brain.indexing.qdrant_store`: collection/alias lifecycle (atomic, lock-guarded alias mutation — resolves `SECURITY_MODEL.md` P1 item 11), point upsert/delete, payload indexes.
-- `ai_brain.indexing.index_note`: the idempotent per-note indexing job, chained after `ingest_note()`'s success; embeds and upserts to Qdrant before any SQLite `chunks` row is written, guaranteeing zero partial rows on failure.
+- `athena.indexing.chunking`: structure-aware Markdown chunking via `chonkie`, hand-built heading-aware rules (never `from_recipe()`, which makes a live network call). Empirically confirmed to split on ATHENA AI-BRAIN's real conversational-turn headers.
+- `athena.indexing.embedding`: dense (`BAAI/bge-m3`, revision-pinned) and sparse (`Qdrant/minicoil-v1` via `fastembed`, no pinning mechanism exists — documented gap) embedding generation.
+- `athena.indexing.qdrant_store`: collection/alias lifecycle (atomic, lock-guarded alias mutation — resolves `SECURITY_MODEL.md` P1 item 11), point upsert/delete, payload indexes.
+- `athena.indexing.index_note`: the idempotent per-note indexing job, chained after `ingest_note()`'s success; embeds and upserts to Qdrant before any SQLite `chunks` row is written, guaranteeing zero partial rows on failure.
 - Migration 0004: `notes.index_state`/`last_index_error` — resolves Phase 2's deliberately deferred item.
-- `ai_brain.worker`/`ai_brain.vault.bootstrap`/`ai_brain.vault.reconcile`: wired to chain indexing after ingestion, with graceful degradation to metadata-only ingestion when Qdrant is unreachable.
-- CLI: `ai-brain index bootstrap`; `ai-brain doctor` gained a `qdrant_reachable` check.
+- `athena.worker`/`athena.vault.bootstrap`/`athena.vault.reconcile`: wired to chain indexing after ingestion, with graceful degradation to metadata-only ingestion when Qdrant is unreachable.
+- CLI: `athena index bootstrap`; `athena doctor` gained a `qdrant_reachable` check.
 - Test suite: 241 tests total (30 new this session, 4 correctly `skip`-marked pending Docker/Qdrant access in this environment) — all passing; mypy --strict clean; ruff clean. Live end-to-end CLI verification performed, including confirming graceful degradation when Qdrant is unreachable.
-- Phase 3 work committed and pushed to `github.com/A3lxq/AI_BRAIN` `main` (`561f8d4`).
+- Phase 3 work committed and pushed to `github.com/A3lxq/ATHENA_AI_BRAIN` `main` (`561f8d4`).
 - `docs/design/retrieval-pipeline.md`: design for hybrid search, cross-store fusion, reranking, context construction, and the retrieval evaluation suite (ADR-0003/0006/0008), including a real Qdrant embedded-mode filter bug found during research and a corrected FTS5 phrase-concatenation assumption.
-- `ai_brain.retrieval.keyword_search`: SQLite FTS5 keyword search with `sanitize_fts5_query`, closing `SECURITY_MODEL.md` P1 item 10 (TB-7, FTS5 query-syntax injection) for the first time.
-- `ai_brain.retrieval.vector_search`: Qdrant hybrid dense+sparse query construction (RRF `FusionQuery`), filter applied defensively on every `Prefetch`.
-- `ai_brain.retrieval.fusion`: hand-written three-way Reciprocal Rank Fusion (vector + chunk-keyword + note-title, `k=60`).
-- `ai_brain.retrieval.reranking`: `BAAI/bge-reranker-v2-m3` cross-encoder reranking, revision-pinned; found and worked around a real `CrossEncoder` API-drift (`activation_fn`, not the older `default_activation_function`).
-- `ai_brain.retrieval.context`: token-budgeted greedy context assembly with per-chunk citations, never truncating a chunk mid-text.
-- `ai_brain.retrieval.evaluation`: Recall@K/Precision@K (K=3,5,10)/MRR/nDCG@10/latency-percentile evaluation harness, plus a distinct unanswerable-question false-positive-rate metric; ships with a 10-note/17-question starter corpus (`tests/retrieval/fixtures/eval_corpus/`).
-- `ai_brain.retrieval.search`: the retrieval orchestrator, degrading to keyword-only fusion (not propagating the exception) when Qdrant is unreachable at query time.
-- `ai_brain.db.repository.chunks`: extended with `get_by_ids`/`get_first_chunk_id_for_note`.
-- CLI: `ai-brain retrieval evaluate [--corpus PATH]`.
+- `athena.retrieval.keyword_search`: SQLite FTS5 keyword search with `sanitize_fts5_query`, closing `SECURITY_MODEL.md` P1 item 10 (TB-7, FTS5 query-syntax injection) for the first time.
+- `athena.retrieval.vector_search`: Qdrant hybrid dense+sparse query construction (RRF `FusionQuery`), filter applied defensively on every `Prefetch`.
+- `athena.retrieval.fusion`: hand-written three-way Reciprocal Rank Fusion (vector + chunk-keyword + note-title, `k=60`).
+- `athena.retrieval.reranking`: `BAAI/bge-reranker-v2-m3` cross-encoder reranking, revision-pinned; found and worked around a real `CrossEncoder` API-drift (`activation_fn`, not the older `default_activation_function`).
+- `athena.retrieval.context`: token-budgeted greedy context assembly with per-chunk citations, never truncating a chunk mid-text.
+- `athena.retrieval.evaluation`: Recall@K/Precision@K (K=3,5,10)/MRR/nDCG@10/latency-percentile evaluation harness, plus a distinct unanswerable-question false-positive-rate metric; ships with a 10-note/17-question starter corpus (`tests/retrieval/fixtures/eval_corpus/`).
+- `athena.retrieval.search`: the retrieval orchestrator, degrading to keyword-only fusion (not propagating the exception) when Qdrant is unreachable at query time.
+- `athena.db.repository.chunks`: extended with `get_by_ids`/`get_first_chunk_id_for_note`.
+- CLI: `athena retrieval evaluate [--corpus PATH]`.
 - Test suite: 296 tests total (55 new this session, 5 correctly `skip`-marked pending Docker/Qdrant access) — all passing; mypy --strict clean; ruff clean. Live end-to-end CLI verification against the real eval corpus (Qdrant unreachable throughout) confirmed and documented a real architectural finding: keyword-only degradation currently returns zero results, not degraded ones, when no note has ever been successfully indexed (`docs/design/retrieval-pipeline.md` §8) — a composition of two individually-correct, already-tested mechanisms, flagged for a future phase/addendum ADR rather than silently patched.
+- **Full project rename to ATHENA AI-BRAIN**, technical identity now matching the branding: the Python package (`ai_brain` → `athena`), the CLI command (`ai-brain` → `athena`), the installable package name (`pyproject.toml`), every `AI_BRAIN_*` environment variable (→ `ATHENA_*`), the `AIBrainConfig` dataclass (→ `AthenaConfig`), the Qdrant collection alias (`ai_brain_chunks*` → `athena_chunks*`), the deployment configs (`ai-brain-huey-worker.service` → `athena-huey-worker.service`, `ai-brain-mcp-launch.sh` → `athena-mcp-launch.sh`), and the GitHub repository itself (`A3lxq/AI_BRAIN` → `A3lxq/ATHENA_AI_BRAIN`, via `gh repo rename`). All 296 tests, mypy --strict, and ruff remain clean after the rename; a live CLI smoke test confirmed the renamed entry point and env vars work end-to-end. See `docs/sessions/2026-09-03_project-rename.md`.
 
 ### Not yet implemented
 - Status promotion from `draft` to `active` (no mechanism decided yet)
 - `watchdog` supply-chain review (flagged as required, not yet performed)
 - `fastembed`/miniCOIL revision pinning (no mechanism exists upstream)
-- `ai_brain.mcp_server` (MCP server entry point)
+- `athena.mcp_server` (MCP server entry point)
 - The zero-results-on-full-degradation gap in Phase 4's keyword-only fallback (`docs/design/retrieval-pipeline.md` §8) — a real design decision deferred to a future phase, not fixed in this pass
-- Regression-gating threshold for `ai-brain retrieval evaluate` (currently always exits 0)
+- Regression-gating threshold for `athena retrieval evaluate` (currently always exits 0)
 - Retrieval-evaluation corpus scale-up to `TESTING_STRATEGY.md`'s 30-60 note target (currently 10 notes/17 questions)
 - Event engine
 - Git automation module
+- The local `origin` git remote still points at the pre-rename URL (`git@github.com:A3lxq/AI_BRAIN.git`) — it works today via GitHub's rename redirect, but updating it (`git remote set-url origin git@github.com:A3lxq/ATHENA_AI_BRAIN.git`) requires a git-config change this environment's tooling won't make on the user's behalf; the user should run it themselves

@@ -17,8 +17,8 @@ doc §2), so each gets a different sandboxing mechanism:
 
 | Process | Launched by | Sandboxed with | File |
 |---|---|---|---|
-| **MCP server** (stdio) | The MCP client itself (Claude Code / Claude Desktop), as a child process | `bwrap` (bubblewrap) wrapper script | `bubblewrap/ai-brain-mcp-launch.sh` |
-| **Huey worker** | `systemd --user`, independent background daemon | `systemd --user` unit hardening directives | `systemd/ai-brain-huey-worker.service` |
+| **MCP server** (stdio) | The MCP client itself (Claude Code / Claude Desktop), as a child process | `bwrap` (bubblewrap) wrapper script | `bubblewrap/athena-mcp-launch.sh` |
+| **Huey worker** | `systemd --user`, independent background daemon | `systemd --user` unit hardening directives | `systemd/athena-huey-worker.service` |
 
 The MCP server can't be a systemd unit because the MCP client needs to own
 its stdin/stdout directly for protocol framing (design doc §2). The Huey
@@ -34,7 +34,7 @@ similar across the two files.
 
    ```bash
    mkdir -p ~/.config/systemd/user
-   cp deployment/systemd/ai-brain-huey-worker.service ~/.config/systemd/user/
+   cp deployment/systemd/athena-huey-worker.service ~/.config/systemd/user/
    ```
 
 2. **Before enabling it**, edit the copied file's `ExecStart=` line — it
@@ -45,14 +45,14 @@ similar across the two files.
 
    ```bash
    systemctl --user daemon-reload
-   systemctl --user enable --now ai-brain-huey-worker.service
+   systemctl --user enable --now athena-huey-worker.service
    ```
 
 4. Check status and logs:
 
    ```bash
-   systemctl --user status ai-brain-huey-worker.service
-   journalctl --user -u ai-brain-huey-worker.service -f
+   systemctl --user status athena-huey-worker.service
+   journalctl --user -u athena-huey-worker.service -f
    ```
 
 5. Optional — keep the worker running after logout (design doc §2's "System
@@ -66,12 +66,12 @@ similar across the two files.
    any deploy and track the score over time:
 
    ```bash
-   systemd-analyze security ai-brain-huey-worker.service
+   systemd-analyze security athena-huey-worker.service
    ```
 
 ## Wiring the bubblewrap script into an MCP client
 
-`bubblewrap/ai-brain-mcp-launch.sh` is meant to be the `command` an MCP
+`bubblewrap/athena-mcp-launch.sh` is meant to be the `command` an MCP
 client invokes to start ATHENA AI-BRAIN's MCP server, instead of invoking Python
 directly. The exact config file format varies by client (Claude Code's and
 Claude Desktop's MCP server configuration formats differ from each other and
@@ -79,15 +79,15 @@ change over time), so this is described conceptually rather than as a
 copy-paste snippet:
 
 - Point the client's MCP server entry's `command` at the **absolute path**
-  to `ai-brain-mcp-launch.sh` (not at the Python interpreter or module
+  to `athena-mcp-launch.sh` (not at the Python interpreter or module
   directly) — this is what makes the server process actually start inside
   the bubblewrap sandbox rather than unsandboxed.
 - Pass no `args` beyond what the script itself already hardcodes; the script
   takes no CLI arguments (it reads configuration from environment variables
   — see below).
-- Set `AI_BRAIN_VAULT_DIR` in the environment the MCP client uses to launch
+- Set `ATHENA_VAULT_DIR` in the environment the MCP client uses to launch
   the server (client configs typically support an `env` map for exactly
-  this). The script fails fast (`set -euo pipefail` + `${AI_BRAIN_VAULT_DIR:?...}`)
+  this). The script fails fast (`set -euo pipefail` + `${ATHENA_VAULT_DIR:?...}`)
   if this is missing, rather than silently running unsandboxed or against
   the wrong path.
 - Do not rely on the client inheriting your interactive shell's environment
@@ -96,7 +96,7 @@ copy-paste snippet:
   paths into the sandboxed process), so anything the sandboxed process needs
   must be passed explicitly via `--setenv` inside the script, not assumed to
   arrive from outside.
-- This project's own MCP server (`ai_brain.mcp_server`) does not exist yet
+- This project's own MCP server (`athena.mcp_server`) does not exist yet
   (see "Open items"), so this wiring cannot actually be completed today —
   document it now, use it once Phase 6 delivers the module.
 
@@ -104,8 +104,8 @@ copy-paste snippet:
 
 | Variable | Required by | Purpose |
 |---|---|---|
-| `AI_BRAIN_VAULT_DIR` | `ai-brain-mcp-launch.sh` | Absolute path to the Obsidian vault; bind-mounted read-write into the sandbox and passed through as the same env var inside it. Script aborts if unset. |
-| `HOME` | both artifacts | Used to derive `STATE_DIR` (`$HOME/.local/state/ai-brain`), `MODEL_CACHE` (`$HOME/.cache/huggingface`), and the `.ssh`/`.aws`/`.gnupg` lockout paths in the bubblewrap script; `%h` in the systemd unit resolves the same way for that process. Always set by the OS/login session — not something you need to export yourself. |
+| `ATHENA_VAULT_DIR` | `athena-mcp-launch.sh` | Absolute path to the Obsidian vault; bind-mounted read-write into the sandbox and passed through as the same env var inside it. Script aborts if unset. |
+| `HOME` | both artifacts | Used to derive `STATE_DIR` (`$HOME/.local/state/athena`), `MODEL_CACHE` (`$HOME/.cache/huggingface`), and the `.ssh`/`.aws`/`.gnupg` lockout paths in the bubblewrap script; `%h` in the systemd unit resolves the same way for that process. Always set by the OS/login session — not something you need to export yourself. |
 
 No other environment variables are read by either script. Anything else the
 MCP server process needs at runtime must be added explicitly as a
@@ -117,14 +117,14 @@ above) once that process actually exists.
 **Neither artifact is deployment-ready yet.** Both contain deliberate
 placeholders, clearly marked with comments in the files themselves:
 
-1. **Venv/install path.** `ai-brain-huey-worker.service`'s `ExecStart=` uses
-   `%h/ai-brain/.venv/bin/python`, and `ai-brain-mcp-launch.sh`'s `VENV`
-   variable uses `${HOME}/ai-brain/.venv` — both are placeholders. This
+1. **Venv/install path.** `athena-huey-worker.service`'s `ExecStart=` uses
+   `%h/athena/.venv/bin/python`, and `athena-mcp-launch.sh`'s `VENV`
+   variable uses `${HOME}/athena/.venv` — both are placeholders. This
    project's actual virtualenv/install location has not been decided as of
    this writing. Update both once it is.
-2. **`ai_brain.worker` (Huey worker entry point)** — not built yet; a later
+2. **`athena.worker` (Huey worker entry point)** — not built yet; a later
    Phase 2/3 component.
-3. **`ai_brain.mcp_server` (MCP server entry point)** — not built yet; a
+3. **`athena.mcp_server` (MCP server entry point)** — not built yet; a
    later Phase 6 component.
 4. **Vault path placeholder.** The systemd unit's `ReadWritePaths=` uses
    `%h/ObsidianVault` as a stand-in; confirm this against wherever the vault
@@ -151,7 +151,7 @@ sessions (per CLAUDE.md's session-continuity rules):
   doc's §7.1 test #2. Do not enable it without running that test first.
 - Whether the systemd unit duplication implied by having near-identical
   directive blocks across the MCP-server and Huey-worker configurations
-  should be refactored into a systemd template unit (`ai-brain@.service`)
+  should be refactored into a systemd template unit (`athena@.service`)
   during Phase 1 implementation — a code-organization choice, not a
   security-relevant one.
 
@@ -159,11 +159,11 @@ sessions (per CLAUDE.md's session-continuity rules):
 
 - Environment: systemd 259 (259.5-0ubuntu3.4, Ubuntu-based), bubblewrap
   0.11.1, Docker 29.1.3.
-- Every systemd directive in `ai-brain-huey-worker.service` was checked
+- Every systemd directive in `athena-huey-worker.service` was checked
   against this environment's `man systemd.exec` and confirmed to exist
   under the same name with the same meaning as in systemd 257 (the version
   the design document researched against). No renames or removals found.
-- Every `bwrap` flag in `ai-brain-mcp-launch.sh` was checked against `bwrap
+- Every `bwrap` flag in `athena-mcp-launch.sh` was checked against `bwrap
   --help`/`man bwrap` in this environment and confirmed to exist in
   0.11.1, and the full flag combination was test-executed end to end
   (`bwrap ... -- /usr/bin/env`, against disposable test directories) to

@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 
 import pytest
 
-from ai_brain.retrieval.evaluation import (
+from athena.retrieval.evaluation import (
     DEFAULT_CORPUS_DIR,
     Question,
     RelevanceJudgment,

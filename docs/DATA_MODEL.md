@@ -3,7 +3,7 @@
 - **Date:** 2026-08-26
 - **Author:** Claude Code (ATHENA AI-BRAIN Phase 0)
 - **Status:** Phase 0 exit-criteria deliverable — data model is defined
-- **Scope:** ATHENA AI-BRAIN's own SQLite metadata database (`ai_brain.db`), distinct from Huey's job-store file (ADR-0002/ADR-0004), plus the Qdrant payload schema that rides alongside vectors in the separate vector store.
+- **Scope:** ATHENA AI-BRAIN's own SQLite metadata database (`athena.db`), distinct from Huey's job-store file (ADR-0002/ADR-0004), plus the Qdrant payload schema that rides alongside vectors in the separate vector store.
 - **Validated against:** a real sample of the user's actual vault content (see §0 below) — this is not a purely theoretical design.
 
 ## 0. Real Vault Data Format — Validated Against a Sample
@@ -32,11 +32,11 @@ Three durable stores exist, per already-accepted ADRs:
 
 | Store | Owns | ADR |
 |---|---|---|
-| `ai_brain.db` (this document) | note metadata, provenance, lifecycle, duplicate candidates, chunk text, FTS5 keyword index | ADR-0004 |
+| `athena.db` (this document) | note metadata, provenance, lifecycle, duplicate candidates, chunk text, FTS5 keyword index | ADR-0004 |
 | Huey's separate `.db` file | disposable/re-derivable job-queue state (opaque schema, not modeled here) | ADR-0002, ADR-0004 |
 | Qdrant collection (Docker, alias-addressed) | dense (BGE-M3, 1024-dim) + sparse (miniCOIL) vectors per chunk | ADR-0006, ADR-0008 |
 
-The vault (Markdown, with or without YAML frontmatter — see §0) remains the canonical knowledge store (Master Spec §2). `ai_brain.db` is derived/index state that must be rebuildable from the vault plus provenance history — it is not itself the source of truth, consistent with Master Spec §2/§3.
+The vault (Markdown, with or without YAML frontmatter — see §0) remains the canonical knowledge store (Master Spec §2). `athena.db` is derived/index state that must be rebuildable from the vault plus provenance history — it is not itself the source of truth, consistent with Master Spec §2/§3.
 
 Every connection opener must set, per ADR-0004:
 
@@ -341,7 +341,7 @@ Query pattern for ranking: `SELECT note_id, bm25(chunks_fts) AS score FROM chunk
 
 ## 3. Qdrant payload schema
 
-Per ADR-0008: dense vectors are `BAAI/bge-m3` (1024-dim, cosine distance), sparse vectors are miniCOIL (`Qdrant/minicoil-v1`, with a documented BM25-sparse fallback), both stored as named vectors on the same point. Per ADR-0006: the collection is addressed through an **alias** (e.g. `ai_brain_chunks` → `ai_brain_chunks_bge_m3_v1`), never a hardcoded name.
+Per ADR-0008: dense vectors are `BAAI/bge-m3` (1024-dim, cosine distance), sparse vectors are miniCOIL (`Qdrant/minicoil-v1`, with a documented BM25-sparse fallback), both stored as named vectors on the same point. Per ADR-0006: the collection is addressed through an **alias** (e.g. `athena_chunks` → `athena_chunks_bge_m3_v1`), never a hardcoded name.
 
 **Point identity:** `qdrant point id == chunks.qdrant_point_id` (a UUID4 string) — this is the single link between the two stores, indexed and `UNIQUE` on the SQLite side.
 

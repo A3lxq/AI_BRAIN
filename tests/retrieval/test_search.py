@@ -6,9 +6,9 @@ from unittest.mock import patch
 import aiosqlite
 from qdrant_client import QdrantClient
 
-from ai_brain.db.repository import chunks as chunks_repo
-from ai_brain.db.repository import notes as notes_repo
-from ai_brain.retrieval.search import search, search_ranked_note_paths
+from athena.db.repository import chunks as chunks_repo
+from athena.db.repository import notes as notes_repo
+from athena.retrieval.search import search, search_ranked_note_paths
 
 
 async def _make_note_with_chunk(
@@ -52,7 +52,7 @@ async def test_search_never_propagates_qdrant_failure(
     unreachable_client = QdrantClient(url="http://127.0.0.1:1")
 
     with patch(
-        "ai_brain.retrieval.search.vector_search.search",
+        "athena.retrieval.search.vector_search.search",
         side_effect=RuntimeError("connection refused"),
     ):
         # Must not raise.

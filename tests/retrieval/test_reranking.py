@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from ai_brain.retrieval import reranking
-from ai_brain.retrieval.reranking import RerankCandidate, rerank
+from athena.retrieval import reranking
+from athena.retrieval.reranking import RerankCandidate, rerank
 
 
 def test_reranker_revision_is_pinned() -> None:

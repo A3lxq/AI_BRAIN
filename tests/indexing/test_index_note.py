@@ -7,10 +7,10 @@ import aiosqlite
 from huey import SqliteHuey
 from qdrant_client import QdrantClient
 
-from ai_brain.db.repository import notes as notes_repo
-from ai_brain.indexing.index_note import index_note
-from ai_brain.safety.paths import VaultRoot
-from ai_brain.vault.ingest import ingest_note
+from athena.db.repository import notes as notes_repo
+from athena.indexing.index_note import index_note
+from athena.safety.paths import VaultRoot
+from athena.vault.ingest import ingest_note
 
 
 def _write(vault_dir: Path, relative: str, text: str) -> Path:
@@ -141,7 +141,7 @@ async def test_index_note_failure_marks_failed_and_reraises(
     note_id = await _ingest(conn, huey, vault_root, path)
 
     with patch(
-        "ai_brain.indexing.index_note.embed_dense",
+        "athena.indexing.index_note.embed_dense",
         side_effect=RuntimeError("embedding service down"),
     ):
         try:

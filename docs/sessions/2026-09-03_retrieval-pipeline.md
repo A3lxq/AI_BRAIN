@@ -43,23 +43,23 @@ Two fronts, per the constitution's "research before implementation" rule:
 
 ### Shared foundation (done directly, before parallel agents)
 
-- `ai_brain.db.repository.chunks`: added `ChunkRow`, `get_by_ids`,
+- `athena.db.repository.chunks`: added `ChunkRow`, `get_by_ids`,
   `get_first_chunk_id_for_note` — needed by fusion/reranking/context but out
   of scope for any one parallel module.
-- `ai_brain/retrieval/` and `tests/retrieval/` package skeletons.
+- `athena/retrieval/` and `tests/retrieval/` package skeletons.
 
 ### Parallel agents (narrow, non-overlapping scope, each required to
 install/test/mypy/ruff itself before reporting)
 
-1. **Keyword search** (`ai_brain/retrieval/keyword_search.py`) —
+1. **Keyword search** (`athena/retrieval/keyword_search.py`) —
    `sanitize_fts5_query`, `search_chunks`, `search_notes`. Tags are filtered
    in Python rather than via SQL `LIKE`, a documented over-fetch-then-filter
    trade-off favoring correctness/simplicity over query-time efficiency.
-2. **Vector search** (`ai_brain/retrieval/vector_search.py`) — hybrid
+2. **Vector search** (`athena/retrieval/vector_search.py`) — hybrid
    dense+sparse query construction. The filter-bug mitigation from research
    was explicitly verified via mock request inspection (filter present on
    every `Prefetch`), not just asserted in a comment.
-3. **Fusion, reranking, context** (`ai_brain/retrieval/{fusion,reranking,
+3. **Fusion, reranking, context** (`athena/retrieval/{fusion,reranking,
    context}.py`) — hand-written RRF (`k=60`, ADR-0003's "hand-rollable"
    allowance, not `ranx`); `BAAI/bge-reranker-v2-m3` cross-encoder
    reranking; token-budgeted greedy context assembly with citations. **A
@@ -70,14 +70,14 @@ install/test/mypy/ruff itself before reporting)
 
 ### Integration work (done directly, since these are highly interdependent)
 
-- `ai_brain/retrieval/search.py` — the orchestrator (`search()` and
+- `athena/retrieval/search.py` — the orchestrator (`search()` and
   `search_ranked_note_paths()`), sharing a `_reranked_results()` helper. A
   mid-edit scaffolding mistake (a broken placeholder function with a
   nonsensical type and `raise NotImplementedError`) was caught and replaced
   before it reached tests. `_vector_search_or_degrade()` catches any
   exception from `vector_search.search` and falls back to keyword-only
   (two-way) RRF fusion, logging a warning rather than propagating.
-- `ai_brain/retrieval/evaluation.py` — Recall@K/Precision@K (K=3,5,10), MRR,
+- `athena/retrieval/evaluation.py` — Recall@K/Precision@K (K=3,5,10), MRR,
   nDCG@10 (graded relevance), latency p50/p95, plus a distinct
   `unanswerable_top1_false_positive_rate` metric tracked separately from the
   other averages (which exclude deliberately-unanswerable questions
@@ -86,8 +86,8 @@ install/test/mypy/ruff itself before reporting)
   17-question starter corpus (`tests/retrieval/fixtures/eval_corpus/`) —
   below `TESTING_STRATEGY.md`'s 30-60 note target, explicitly flagged, not
   silently under-delivered.
-- `ai_brain/worker.py` / `ai_brain/cli.py` — `run_retrieval_evaluate()` and
-  `ai-brain retrieval evaluate [--corpus PATH]`, printing the full report
+- `athena/worker.py` / `athena/cli.py` — `run_retrieval_evaluate()` and
+  `athena retrieval evaluate [--corpus PATH]`, printing the full report
   and always exiting 0 (no regression-gating threshold in this pass,
   explicitly flagged as a scope reduction, not an oversight).
 
@@ -98,11 +98,11 @@ install/test/mypy/ruff itself before reporting)
 - `mypy --strict` across all of `src/`: clean
 - `ruff check`: clean across the whole repo
 - Live end-to-end verification against the real 10-note/17-question eval
-  corpus, Qdrant unreachable throughout: `ai-brain migrate` (applied
-  cleanly) → `ai-brain ingest bootstrap` (`outcome_counts={'created': 10}`,
-  degraded gracefully) → `ai-brain index bootstrap` (failed cleanly as
+  corpus, Qdrant unreachable throughout: `athena migrate` (applied
+  cleanly) → `athena ingest bootstrap` (`outcome_counts={'created': 10}`,
+  degraded gracefully) → `athena index bootstrap` (failed cleanly as
   expected — indexing requires Qdrant, no metadata-only fallback exists for
-  it) → `ai-brain retrieval evaluate`.
+  it) → `athena retrieval evaluate`.
 
 ## A real architectural finding, confirmed live (not left as an assumption)
 
@@ -116,7 +116,7 @@ metric in the report came back exactly `0.000`** —
 hit came back for the 3 deliberately-unanswerable questions — nothing came
 back for *any* question).
 
-Reading `ai_brain/retrieval/fusion.py` confirmed the exact mechanism: it
+Reading `athena/retrieval/fusion.py` confirmed the exact mechanism: it
 already has documented, tested logic (§5 of the design doc, row "a note
 matched via `notes_fts` has zero chunks") to drop any note-title hit whose
 note has no chunk to anchor a `chunk_id` to. That logic is correct in

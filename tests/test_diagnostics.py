@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ai_brain.config import AIBrainConfig
-from ai_brain.diagnostics import run_doctor
+from athena.config import AthenaConfig
+from athena.diagnostics import run_doctor
 
 
 def _config(
     tmp_path: Path, *, vault: Path | None = None, secret: str | None = None
-) -> AIBrainConfig:
+) -> AthenaConfig:
     data_dir = tmp_path / "data"
-    return AIBrainConfig(
+    return AthenaConfig(
         vault_root=vault,
         data_dir=data_dir,
-        db_path=data_dir / "ai_brain.db",
+        db_path=data_dir / "athena.db",
         huey_db_path=data_dir / "huey.db",
         huey_serializer_secret=secret,
         secret_scanner_block_on_high_confidence=False,

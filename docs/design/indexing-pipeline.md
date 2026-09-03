@@ -21,10 +21,10 @@ Three technology areas were re-verified against current primary sources rather t
 
 This design covers the second half of the pipeline `docs/design/migration-runner-and-vault-ingestion.md` deliberately split off (§1 of that document): everything from "a note's metadata is recorded" to "a note is semantically searchable." Concretely:
 
-1. **Chunking** (`ai_brain.indexing.chunking`) — structure-aware Markdown splitting via `chonkie`.
-2. **Embedding** (`ai_brain.indexing.embedding`) — dense vectors (BGE-M3) and sparse vectors (miniCOIL).
-3. **Qdrant store management** (`ai_brain.indexing.qdrant_store`) — collection/alias lifecycle, point upsert/delete, payload indexes.
-4. **The indexing job** (`ai_brain.indexing.index_note`) — the idempotent per-note job that ties the above together, chained after `ingest_note()`'s success, resolving the `notes.last_indexed_at`/`index_state` contract Phase 2 left unset.
+1. **Chunking** (`athena.indexing.chunking`) — structure-aware Markdown splitting via `chonkie`.
+2. **Embedding** (`athena.indexing.embedding`) — dense vectors (BGE-M3) and sparse vectors (miniCOIL).
+3. **Qdrant store management** (`athena.indexing.qdrant_store`) — collection/alias lifecycle, point upsert/delete, payload indexes.
+4. **The indexing job** (`athena.indexing.index_note`) — the idempotent per-note job that ties the above together, chained after `ingest_note()`'s success, resolving the `notes.last_indexed_at`/`index_state` contract Phase 2 left unset.
 5. **`notes.index_state`/`last_index_error` schema addition** — deliberately deferred by the Phase 2 design (§1/§8 of that document); resolved here, by the design that actually owns the job which sets them.
 
 **Explicitly NOT in scope** (Phase 4 — "Retrieval," per `docs/ROADMAP.md`'s own phase boundary):
@@ -51,41 +51,41 @@ ALTER TABLE notes ADD COLUMN last_index_error TEXT;
 
 **Judgment call flagged for review, not silently made**: unlike ADR-0010 (events table) and ADR-0011 (secret-scan schema), this schema addition is not given its own ADR. Reasoning: `EVENT_MODEL.md` §4.1 — an already-accepted Phase 0 exit-criteria deliverable — already specified this exact column pair, its values, and its rationale in detail; this design doc merely implements an already-reviewed recommendation, the same relationship ADR-0011 had to `docs/design/pre-ingestion-secret-scanning.md` (except that design doc's schema was genuinely new, unreviewed state, which is why *it* got ADR-0011). If this judgment is wrong, the fix is cheap: draft a one-paragraph ADR before merging, not before designing.
 
-### 2.2 Chunking (`ai_brain.indexing.chunking`)
+### 2.2 Chunking (`athena.indexing.chunking`)
 
 - Wraps `chonkie.RecursiveChunker`, constructed with a **hand-built `RecursiveRules`** for Markdown headings rather than `from_recipe("markdown")` (§0's local-first finding) — verify the exact `RecursiveRules`/`RecursiveLevel` constructor arguments against the installed `chonkie` version during implementation (its dataclass shape is not re-verified in this design pass; the `from_recipe` avoidance is the load-bearing decision, not the exact rule syntax).
-- Input is always `parsed.body` from `ai_brain.safety.content.parse_note_safely` — this module never sees raw frontmatter, consistent with Phase 2's parsing already stripping it.
+- Input is always `parsed.body` from `athena.safety.content.parse_note_safely` — this module never sees raw frontmatter, consistent with Phase 2's parsing already stripping it.
 - Chunk size default: 512 tokens, ~50-token overlap — reasonable starting points per `chonkie`'s own defaults being similar order of magnitude; **empirical Phase 3 tuning input, not researched-and-final**, same posture already taken for the debounce window and reconciliation interval in Phase 2.
 - **No custom pre-splitting on ATHENA AI-BRAIN's real conversational-turn headers** (`# you asked`, `### USER`) is built in this design: those are ordinary ATX-style Markdown headers, and `RecursiveRules`' heading-boundary logic should treat them as natural split points already. This must be verified with a concrete test against real-shaped fixtures (§7) before trusting it in production — if the empirical test shows chonkie's generic heading detection doesn't split on `###`-level headers the way ATHENA AI-BRAIN needs, a custom pre-split step will need to be added as a follow-up, not assumed away now.
 - Interface: `chunk_note(body: str) -> list[Chunk]`, where `Chunk` is a frozen dataclass (`text: str`, `chunk_index: int`, `token_count: int | None`).
 - An over-long single "chunk" (chonkie's own splitter should prevent this, but defensively) exceeding BGE-M3's 8192-token limit is truncated, not silently dropped — logged at WARN, per `TESTING_STRATEGY.md`'s explicit test case for this.
 
-### 2.3 Embedding (`ai_brain.indexing.embedding`)
+### 2.3 Embedding (`athena.indexing.embedding`)
 
 - **Dense**: one process-lifetime `sentence_transformers.SentenceTransformer("BAAI/bge-m3", revision=<pinned commit hash>)` instance, lazily constructed on first use (not at module import time — loading is expensive, and not every process that imports this module needs it, e.g. the CLI's `--help`). `revision` is pinned to a specific HF commit hash, not `"main"` — resolves `SECURITY_MODEL.md` P1 item 15 ("pin embedding/reranker model loads to a specific Hugging Face revision hash rather than a mutable branch") for the first time.
 - **Sparse**: one process-lifetime `fastembed.SparseTextEmbedding(model_name="Qdrant/minicoil-v1")` instance, same lazy-construction and revision-pinning posture (fastembed's own model-pinning mechanism — likely a model snapshot hash in its cache metadata — needs verification against the installed version during implementation; the *requirement* to pin is what this design mandates, not a specific API call not yet verified).
 - Interface: `embed_dense(texts: list[str]) -> list[list[float]]`, `embed_sparse(texts: list[str]) -> list[SparseVector]` (batched, not one-call-per-chunk, for throughput).
 - `embedding_model_version` stored per-chunk (already a `chunks` column, DATA_MODEL.md §2.8) is a string like `"bge-m3@<revision-hash-prefix>"` — allows a rolling re-embed to filter old-vs-new during a future migration cutover, per DATA_MODEL.md §4's own stated rationale for this column.
 
-### 2.4 Qdrant store (`ai_brain.indexing.qdrant_store`)
+### 2.4 Qdrant store (`athena.indexing.qdrant_store`)
 
-- **Collection bootstrap** (`ensure_collection(client) -> None`, idempotent, called once at worker/CLI startup): creates the versioned collection (e.g. `ai_brain_chunks_bge_m3_v1`) if absent, with:
+- **Collection bootstrap** (`ensure_collection(client) -> None`, idempotent, called once at worker/CLI startup): creates the versioned collection (e.g. `athena_chunks_bge_m3_v1`) if absent, with:
   - dense named vector `"dense"`: size 1024, distance Cosine
   - sparse named vector `"minicoil"`: `models.SparseVectorParams(modifier=models.Modifier.IDF)` — the easy-to-miss requirement from §0
   - payload indexes on `tags` (keyword), `folder` (keyword), `status` (keyword), `note_id` (integer), `embedding_model_version` (keyword) — per DATA_MODEL.md §3's already-specified list
-  - Then atomically points the alias (`ai_brain_chunks`) at it via `client.update_collection_aliases(change_aliases_operations=[...])` — **a single atomic call, never a separate check-then-create-then-repoint sequence** — resolving `SECURITY_MODEL.md` P1 item 11 (the alias-race finding) for the first time. All application code addresses the collection exclusively through the alias name; the versioned name only appears inside `ensure_collection`.
+  - Then atomically points the alias (`athena_chunks`) at it via `client.update_collection_aliases(change_aliases_operations=[...])` — **a single atomic call, never a separate check-then-create-then-repoint sequence** — resolving `SECURITY_MODEL.md` P1 item 11 (the alias-race finding) for the first time. All application code addresses the collection exclusively through the alias name; the versioned name only appears inside `ensure_collection`.
   - Alias mutation itself is wrapped in a `huey.lock_task("qdrant-alias-mutation")` guard, per the same P1 item's second half — prevents two overlapping bootstrap/migration-cutover attempts from racing.
 - **Upsert**: `upsert_chunks(client, note_id, chunks, dense_vectors, sparse_vectors, payload_fields) -> list[str]` — returns the minted `qdrant_point_id` (UUID4) per chunk, per DATA_MODEL.md §2.8's `chunks.qdrant_point_id` contract.
 - **Delete**: `delete_points_for_note(client, note_id) -> None` — via the `note_id` payload index (a filtered delete, not point-id enumeration), used both by re-indexing (delete-then-reinsert, simplest correct approach for a note whose chunk count changed) and by `note_delete` in a future Phase 6 MCP tool.
-- All functions take an already-constructed `QdrantClient` — this module does not own client lifecycle, matching `ai_brain.db.connection`'s same pattern for SQLite.
+- All functions take an already-constructed `QdrantClient` — this module does not own client lifecycle, matching `athena.db.connection`'s same pattern for SQLite.
 
-### 2.5 The indexing job (`ai_brain.indexing.index_note`)
+### 2.5 The indexing job (`athena.indexing.index_note`)
 
 `index_note(conn, qdrant_client, note_id, *, correlation_id, causation_id) -> IndexResult`:
 
 1. Look up the `notes` row by id. If `deleted_at` is set, this is a stale trigger for a since-deleted note — no-op (a genuine `note_delete` path, once it exists in Phase 6, is responsible for calling `delete_points_for_note` itself; this job never runs against a tombstoned note).
 2. **Idempotency check**: compare `chunks` rows' aggregate content (or a simpler per-note stored signal — see Open Questions §9, since `notes.content_hash` already changing was what triggered this job in the first place, re-reading it here would just re-confirm what the caller already knows) — in practice, since this job is only ever triggered right after `ingest_note()` reports `created`/`updated` (§2.6), no additional hash check is needed here; the trigger itself *is* the change signal, avoiding the double-check anti-pattern.
-3. Read the note's current body from disk again (via `ai_brain.safety.paths.resolve_vault_path` + `parse_note_safely`, exactly as `ingest_note()` did) — **not** from a cached copy, since chunk text must reflect exactly what was last recorded in `notes.content_hash`. Re-deriving from disk, never diffing, mirrors ADR-0009's core idempotency philosophy applied one layer up.
+3. Read the note's current body from disk again (via `athena.safety.paths.resolve_vault_path` + `parse_note_safely`, exactly as `ingest_note()` did) — **not** from a cached copy, since chunk text must reflect exactly what was last recorded in `notes.content_hash`. Re-deriving from disk, never diffing, mirrors ADR-0009's core idempotency philosophy applied one layer up.
 4. `chunk_note(parsed.body)`.
 5. `embed_dense`/`embed_sparse` on the chunk texts (batched).
 6. `delete_points_for_note` (clears any prior chunk set for this note — simplest correct handling of a note whose chunk count changed between versions) **then** `upsert_chunks` — Qdrant write happens before the SQLite write, so a crash between them leaves Qdrant slightly ahead, never SQLite falsely marked current (see §5's ordering rationale, mirroring Phase 2's "last write is the commit marker" pattern).
@@ -97,14 +97,14 @@ On any exception in steps 3-8: catch, set `notes.index_state='failed'` + `last_i
 
 ### 2.6 Chaining after `ingest_note()`
 
-`ai_brain.worker.ingest_note_task` (Phase 2, existing) gains one addition: after `ingest_note()` returns, if `result.outcome in {"created", "updated"}`, enqueue `index_note_task(result.note_id, correlation_id, causation_id=<ingest's completion event id>)` — the same "one code path, multiple triggers, but this trigger is itself downstream of another job's completion" pattern `EVENT_MODEL.md` §3.4 originally described as one fused step; Phase 2 split it into two chained jobs instead of one monolithic one, and this is where the chain reconnects. `ingest.py` itself remains free of any chonkie/Qdrant/sentence-transformers import — the chaining lives in `worker.py`, preserving Phase 2's explicit scope boundary.
+`athena.worker.ingest_note_task` (Phase 2, existing) gains one addition: after `ingest_note()` returns, if `result.outcome in {"created", "updated"}`, enqueue `index_note_task(result.note_id, correlation_id, causation_id=<ingest's completion event id>)` — the same "one code path, multiple triggers, but this trigger is itself downstream of another job's completion" pattern `EVENT_MODEL.md` §3.4 originally described as one fused step; Phase 2 split it into two chained jobs instead of one monolithic one, and this is where the chain reconnects. `ingest.py` itself remains free of any chonkie/Qdrant/sentence-transformers import — the chaining lives in `worker.py`, preserving Phase 2's explicit scope boundary.
 
-Bootstrap and reconcile (`ai_brain.vault.bootstrap`/`reconcile`) get the same treatment: after each `ingest_note()` call reporting `created`/`updated`, call `index_note()` directly (synchronously) — consistent with those modules' existing "call directly, don't queue" pattern from Phase 2, for the same one-shot/low-scale reasoning already documented there.
+Bootstrap and reconcile (`athena.vault.bootstrap`/`reconcile`) get the same treatment: after each `ingest_note()` call reporting `created`/`updated`, call `index_note()` directly (synchronously) — consistent with those modules' existing "call directly, don't queue" pattern from Phase 2, for the same one-shot/low-scale reasoning already documented there.
 
 ## 3. Interfaces
 
 ```python
-# ai_brain/indexing/chunking.py
+# athena/indexing/chunking.py
 @dataclass(frozen=True)
 class Chunk:
     text: str
@@ -113,7 +113,7 @@ class Chunk:
 
 def chunk_note(body: str, *, chunk_size: int = 512, chunk_overlap: int = 50) -> list[Chunk]: ...
 
-# ai_brain/indexing/embedding.py
+# athena/indexing/embedding.py
 @dataclass(frozen=True)
 class SparseVector:
     indices: list[int]
@@ -124,8 +124,8 @@ EMBEDDING_MODEL_VERSION: str  # e.g. "bge-m3@<revision-prefix>", computed once a
 def embed_dense(texts: list[str]) -> list[list[float]]: ...
 def embed_sparse(texts: list[str]) -> list[SparseVector]: ...
 
-# ai_brain/indexing/qdrant_store.py
-COLLECTION_ALIAS: str = "ai_brain_chunks"
+# athena/indexing/qdrant_store.py
+COLLECTION_ALIAS: str = "athena_chunks"
 
 def ensure_collection(client: QdrantClient, huey: Huey) -> None: ...
 def upsert_chunks(
@@ -135,7 +135,7 @@ def upsert_chunks(
 ) -> list[str]: ...  # returns qdrant_point_id per chunk, same order as `chunks`
 def delete_points_for_note(client: QdrantClient, note_id: int) -> None: ...
 
-# ai_brain/indexing/index_note.py
+# athena/indexing/index_note.py
 @dataclass(frozen=True)
 class IndexResult:
     outcome: Literal["indexed", "noop", "failed"]
@@ -157,7 +157,7 @@ New `pyproject.toml` dependencies, all pinned to at least the version verified i
 - `fastembed` — sparse vectors via ONNX Runtime (no torch overlap with sentence-transformers' stack, per §0 — the two libraries pull genuinely separate heavy runtimes, a real ~3-5GB combined install cost, confirmed and accepted here rather than discovered as a surprise later).
 - `qdrant-client>=1.16.0` — the lower bound closes CVE-2026-25628 (arbitrary file write, server-side but the client version gate is the simplest place to enforce a floor); cross-references ADR-0006's own "pin image tag" requirement, which must independently pin the **server** image to ≥1.16.0 as well (a deployment-config change, not a Python dependency — flagged for the docker-compose/run command that doesn't exist yet, see §8).
 
-Reused, unchanged: `ai_brain.safety.paths`, `ai_brain.safety.content` (Phase 1), `ai_brain.db.repository.notes` (extended with `update_index_state`, a new small function analogous to Phase 2's `update_secret_scan_status`).
+Reused, unchanged: `athena.safety.paths`, `athena.safety.content` (Phase 1), `athena.db.repository.notes` (extended with `update_index_state`, a new small function analogous to Phase 2's `update_secret_scan_status`).
 
 ## 5. Failure Modes
 
@@ -169,30 +169,30 @@ Reused, unchanged: `ai_brain.safety.paths`, `ai_brain.safety.content` (Phase 1),
 | `chonkie`'s heading-boundary detection doesn't respect ATHENA AI-BRAIN's real turn-header shapes as well as assumed | Empirical test (§7) | **Flagged as a real risk, not asserted safe** — if the test fails, a custom pre-split step on `# you asked`/`### USER`-style headers before handing text to `chonkie` becomes a required follow-up, not a hypothetical one |
 | Two overlapping alias-mutation attempts (e.g. bootstrap running twice concurrently) | `huey.lock_task` guard around `ensure_collection`'s alias-mutating branch | Second attempt fails fast (per Huey's `TaskLock` being fail-fast, verified in Phase 2) rather than racing — consistent with how Phase 2 already uses the identical mechanism for per-path ingestion locking |
 | `sentence-transformers`/`fastembed` model download fails (no network, HF Hub down) | Propagates as an exception from `embed_dense`/`embed_sparse` | `index_note` job fails cleanly, retried per Huey policy — no special handling beyond the generic failure path, since this is indistinguishable from any other transient dependency failure |
-| Docker/Qdrant genuinely not running in this environment (§0's current blocker) | N/A — this is a deployment-readiness gap, not a code failure mode | `ensure_collection`/every Qdrant call fails with a connection error; `ai-brain doctor` should report this clearly (§6) rather than every indexing job failing with an opaque stack trace |
+| Docker/Qdrant genuinely not running in this environment (§0's current blocker) | N/A — this is a deployment-readiness gap, not a code failure mode | `ensure_collection`/every Qdrant call fails with a connection error; `athena doctor` should report this clearly (§6) rather than every indexing job failing with an opaque stack trace |
 
 ## 6. CLI / Doctor Additions
 
-- `ai-brain doctor` gains a `qdrant_reachable` check: attempts `QdrantClient(url=...).get_collections()` with a short timeout; `warn` (not `fail`) if unreachable, since Qdrant is a separate deployment concern from ATHENA AI-BRAIN's own process health, mirroring how `bwrap_available`/`docker_available` are already `warn`-level, optional checks rather than hard failures.
-- `ai-brain index bootstrap` — a one-time pass indexing every note with `index_state != 'current'`, the Phase 3 counterpart to `ai-brain ingest bootstrap`, needed for the same reason: the initial corpus (already ingested by Phase 2, `index_state='stale'` by migration default) needs an explicit first indexing pass, not just newly-changed notes going forward.
-- Qdrant connection config: `AI_BRAIN_QDRANT_URL` (default `http://127.0.0.1:6333`, matching ADR-0006's binding), added to `ai_brain.config`.
+- `athena doctor` gains a `qdrant_reachable` check: attempts `QdrantClient(url=...).get_collections()` with a short timeout; `warn` (not `fail`) if unreachable, since Qdrant is a separate deployment concern from ATHENA AI-BRAIN's own process health, mirroring how `bwrap_available`/`docker_available` are already `warn`-level, optional checks rather than hard failures.
+- `athena index bootstrap` — a one-time pass indexing every note with `index_state != 'current'`, the Phase 3 counterpart to `athena ingest bootstrap`, needed for the same reason: the initial corpus (already ingested by Phase 2, `index_state='stale'` by migration default) needs an explicit first indexing pass, not just newly-changed notes going forward.
+- Qdrant connection config: `ATHENA_QDRANT_URL` (default `http://127.0.0.1:6333`, matching ADR-0006's binding), added to `athena.config`.
 
 ## 7. Test Strategy
 
 Extends `TESTING_STRATEGY.md`'s "RAG Pipeline" and "Qdrant Integration" sections (already specified there, before this design existed) rather than duplicating them.
 
-**Chunking (`ai_brain.indexing.chunking`) — pure unit, no Qdrant/Huey/DB:**
+**Chunking (`athena.indexing.chunking`) — pure unit, no Qdrant/Huey/DB:**
 - A note using ATHENA AI-BRAIN's real `# you asked`/`### USER` turn-header shapes (fixtures already exist in `tests/safety/test_content.py` and `tests/vault/test_ingest.py` — reuse, don't reinvent) — assert chunk boundaries actually fall on those headers. **This is the empirical test §2.2/§5 flags as not yet proven** — its result determines whether a follow-up custom pre-splitter is needed.
 - A code-fence-containing chunk is never split mid-fence.
 - Empty/whitespace-only/single-word body — no crash, returns zero or one trivial chunk.
 - A synthetically oversized single "paragraph" (no natural split points) exceeding 8192 tokens — assert truncation, not a raised exception or silent drop.
 
-**Embedding (`ai_brain.indexing.embedding`) — unit, model downloads required (mark slow/network-dependent):**
+**Embedding (`athena.indexing.embedding`) — unit, model downloads required (mark slow/network-dependent):**
 - Encoding the same text twice produces identical vectors (determinism).
 - Output dimension is exactly 1024 for dense.
 - `EMBEDDING_MODEL_VERSION` string actually contains the pinned revision, not `"main"` or a mutable ref — a structural test guarding against the pinning requirement regressing silently.
 
-**Qdrant store (`ai_brain.indexing.qdrant_store`) — split per ADR-0006's own testing rule:**
+**Qdrant store (`athena.indexing.qdrant_store`) — split per ADR-0006's own testing rule:**
 - Unit, `QdrantClient(":memory:")` permitted (non-fusion-critical): collection-config construction produces the expected request shape.
 - Integration, **requires a real Qdrant server — currently blocked in this environment per §0/§8**: `ensure_collection` is idempotent (calling twice doesn't error or duplicate); the alias actually resolves to the versioned collection; `upsert_chunks`/`delete_points_for_note` round-trip correctly; a payload-index-based delete only removes the target note's points, not others'; sparse vector round-trip with the IDF modifier actually set (query and confirm non-trivial results, not just "upsert didn't error").
 - Contract (can run without a live server): a CI check flags any test using `:memory:` while also asserting alias-repoint or sparse-vector-specific behavior — the same contract check `TESTING_STRATEGY.md` already specifies for hybrid fusion, extended to cover this design's own Qdrant-specific behaviors.
@@ -203,7 +203,7 @@ Extends `TESTING_STRATEGY.md`'s "RAG Pipeline" and "Qdrant Integration" sections
 - A note's `chunks` count shrinking between versions (fewer chunks in v2 than v1) — assert the old extra points/rows are actually gone, not orphaned (proves delete-then-reinsert, not a naive upsert-only approach).
 - Failure path: mock `embed_dense` to raise — assert `index_state='failed'`, `last_index_error` populated, `job.failed` emitted, no partial `chunks` rows written.
 
-**Chaining (`ai_brain.worker`):**
+**Chaining (`athena.worker`):**
 - `ingest_note_task`'s `call_local` (Phase 2's own established testing pattern) with a genuinely new note — assert `index_note_task` was also invoked (mock/spy on the enqueue call, since asserting the *queued* task actually ran would require a live consumer).
 - A `noop` ingest outcome — assert `index_note_task` is *not* enqueued (idempotency extends across the chain, not just within each job).
 

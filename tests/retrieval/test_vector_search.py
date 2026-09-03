@@ -8,17 +8,17 @@ import pytest
 from huey import SqliteHuey
 from qdrant_client import QdrantClient, models
 
-from ai_brain.indexing.chunking import Chunk
-from ai_brain.indexing.embedding import SparseVector
-from ai_brain.indexing.qdrant_store import COLLECTION_ALIAS, ensure_collection, upsert_chunks
-from ai_brain.retrieval.vector_search import VectorHit, search
+from athena.indexing.chunking import Chunk
+from athena.indexing.embedding import SparseVector
+from athena.indexing.qdrant_store import COLLECTION_ALIAS, ensure_collection, upsert_chunks
+from athena.retrieval.vector_search import VectorHit, search
 
 
 def _huey(tmp_path: Path) -> SqliteHuey:
     # SqliteHuey's storage opens a fresh connection per call -- ":memory:"
     # gives each call an empty, table-less database. A real temp file is
     # needed (same finding tests/indexing/test_qdrant_store.py documents).
-    return SqliteHuey(name="ai-brain-test", filename=str(tmp_path / "huey.db"))
+    return SqliteHuey(name="athena-test", filename=str(tmp_path / "huey.db"))
 
 
 def _client(tmp_path: Path) -> QdrantClient:

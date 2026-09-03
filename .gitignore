@@ -18,7 +18,7 @@ htmlcov/
 # uv
 uv.lock.tmp
 
-# AI_BRAIN runtime state — never commit derived state or secrets
+# ATHENA AI-BRAIN runtime state — never commit derived state or secrets
 *.db
 *.db-wal
 *.db-shm

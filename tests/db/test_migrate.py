@@ -5,7 +5,7 @@ from pathlib import Path
 import aiosqlite
 import pytest
 
-from ai_brain.db.migrate import (
+from athena.db.migrate import (
     DEFAULT_MIGRATIONS_DIR,
     MigrationChecksumMismatchError,
     MigrationError,

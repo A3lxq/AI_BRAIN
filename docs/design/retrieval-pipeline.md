@@ -19,14 +19,14 @@ Two technical areas were verified against current primary sources and, in one ca
 
 This design covers everything from "a note's chunks are indexed" (Phase 3's endpoint) to "a ranked, reranked, cited context is ready to hand to an LLM." Concretely:
 
-1. **Keyword search** (`ai_brain.retrieval.keyword_search`) — safe FTS5 querying against `chunks_fts` and `notes_fts`, resolving the query-injection gap Phase 2/3 both explicitly deferred.
-2. **Vector search** (`ai_brain.retrieval.vector_search`) — Qdrant hybrid dense+sparse query via `query_points`/`Prefetch`/`FusionQuery`.
-3. **Cross-store fusion** (`ai_brain.retrieval.fusion`) — a hand-written Reciprocal Rank Fusion (RRF) combining three rank lists (Qdrant hybrid, `chunks_fts`, `notes_fts`) into one chunk ranking.
-4. **Reranking** (`ai_brain.retrieval.reranking`) — `BAAI/bge-reranker-v2-m3` via `CrossEncoder.rank()`, revision-pinned.
-5. **Context builder** (`ai_brain.retrieval.context`) — assembles a token-budgeted, cited context string from the final ranked chunks.
+1. **Keyword search** (`athena.retrieval.keyword_search`) — safe FTS5 querying against `chunks_fts` and `notes_fts`, resolving the query-injection gap Phase 2/3 both explicitly deferred.
+2. **Vector search** (`athena.retrieval.vector_search`) — Qdrant hybrid dense+sparse query via `query_points`/`Prefetch`/`FusionQuery`.
+3. **Cross-store fusion** (`athena.retrieval.fusion`) — a hand-written Reciprocal Rank Fusion (RRF) combining three rank lists (Qdrant hybrid, `chunks_fts`, `notes_fts`) into one chunk ranking.
+4. **Reranking** (`athena.retrieval.reranking`) — `BAAI/bge-reranker-v2-m3` via `CrossEncoder.rank()`, revision-pinned.
+5. **Context builder** (`athena.retrieval.context`) — assembles a token-budgeted, cited context string from the final ranked chunks.
 6. **Filters** — tags/folder/status, applied as real SQL predicates against `notes` for the keyword legs and as `Prefetch.filter` for the vector leg — never pushed into FTS5 `MATCH` syntax.
-7. **The orchestrator** (`ai_brain.retrieval.search`) — the single business-logic entry point (`search(...)`) a future Phase 6 `vault_search` MCP tool will call, per CLAUDE.md rule 15's transport-decoupling requirement.
-8. **A starter retrieval-evaluation corpus and harness** (`ai_brain.retrieval.evaluation`) — per `TESTING_STRATEGY.md`'s spec (Recall@K/Precision@K/MRR/nDCG@10, latency), built at a smaller starting scale than that document's 30-60 note target (§2.6 explains why and flags the gap explicitly, not silently).
+7. **The orchestrator** (`athena.retrieval.search`) — the single business-logic entry point (`search(...)`) a future Phase 6 `vault_search` MCP tool will call, per CLAUDE.md rule 15's transport-decoupling requirement.
+8. **A starter retrieval-evaluation corpus and harness** (`athena.retrieval.evaluation`) — per `TESTING_STRATEGY.md`'s spec (Recall@K/Precision@K/MRR/nDCG@10, latency), built at a smaller starting scale than that document's 30-60 note target (§2.6 explains why and flags the gap explicitly, not silently).
 
 **Explicitly NOT in scope** (later phases, per `docs/ROADMAP.md`'s own boundaries):
 
@@ -37,21 +37,21 @@ This design covers everything from "a note's chunks are indexed" (Phase 3's endp
 
 ## 2. Responsibilities
 
-### 2.1 Keyword search (`ai_brain.retrieval.keyword_search`)
+### 2.1 Keyword search (`athena.retrieval.keyword_search`)
 
 - `sanitize_fts5_query(raw: str) -> str` — the verified-safe construction from §0: split on whitespace, double embedded `"` per word, wrap each word in `"..."`, join with spaces. Empty input after stripping returns an empty string (callers must treat this as "no keyword leg," not query FTS5 with an empty `MATCH`, which raises).
 - `search_chunks(conn, query, *, tags=None, folder=None, status=None, limit=50) -> list[KeywordHit]` — queries `chunks_fts MATCH ?` with the sanitized query, ranked by `bm25(chunks_fts)` (lower is better, per DATA_MODEL.md §2.9's own documented convention — this function returns results already sorted best-first, inverting that convention internally so callers never have to remember it). Tag/folder/status filters are applied via a `JOIN notes ON notes.id = chunks.note_id WHERE notes.deleted_at IS NULL AND ...` — ordinary parameterized SQL predicates on real columns, never FTS5 syntax. `KeywordHit` carries `chunk_id`, `note_id`, `rank` (1-based position in this result list, not the raw bm25 score — see §2.3 for why fusion only ever uses rank).
 - `search_notes(conn, query, *, tags=None, folder=None, status=None, limit=50) -> list[NoteTitleHit]` — the same pattern against `notes_fts` (title/tag matches). `NoteTitleHit` carries `note_id` and `rank`; it has no `chunk_id` of its own (title matches aren't chunk-scoped) — §2.3 resolves this by mapping each hit to that note's first chunk (`chunk_index = 0`) as a representative proxy for fusion purposes only. A note with zero indexed chunks (not yet indexed, or `index_state != 'current'`) is excluded from this mapping, not crashed on.
 
-### 2.2 Vector search (`ai_brain.retrieval.vector_search`)
+### 2.2 Vector search (`athena.retrieval.vector_search`)
 
 - `search(client, query_text, *, tags=None, folder=None, status=None, limit=50) -> list[VectorHit]`:
-  1. Embed `query_text` via `ai_brain.indexing.embedding.embed_dense`/`embed_sparse` (reused unchanged — a query is embedded exactly like a chunk, no separate query-encoder exists for BGE-M3/miniCOIL).
+  1. Embed `query_text` via `athena.indexing.embedding.embed_dense`/`embed_sparse` (reused unchanged — a query is embedded exactly like a chunk, no separate query-encoder exists for BGE-M3/miniCOIL).
   2. Build one `models.Filter` from `tags`/`folder`/`status` (matching `DATA_MODEL.md` §3's payload field names) and set it on **every** `Prefetch`, per §0's empirically-found local-mode gap — never only on the outer query.
   3. `client.query_points(collection_name=COLLECTION_ALIAS, prefetch=[Prefetch(query=dense_vec, using="dense", limit=limit, filter=f), Prefetch(query=SparseVector(...), using="minicoil", limit=limit, filter=f)], query=FusionQuery(fusion=Fusion.RRF), query_filter=f, limit=limit, with_payload=True)`.
   4. Map `result.points` to `VectorHit(note_id, chunk_id=payload.get("chunk_id"), qdrant_point_id=str(point.id), rank)` — `payload["chunk_id"]` is `None` for any point upserted before this design existed (Phase 3's `upsert_chunks` deliberately excluded it, per that design's own documented trade-off); such hits are still usable for note-level context but cannot be joined back to a specific `chunks` row. Flagged in §8, not silently patched over here.
 
-### 2.3 Cross-store fusion (`ai_brain.retrieval.fusion`)
+### 2.3 Cross-store fusion (`athena.retrieval.fusion`)
 
 - A hand-written Reciprocal Rank Fusion, not `ranx` (ADR-0003 left this choice open) — the formula is a few lines (`score(d) = Σ 1/(k + rank_i(d))` across whichever input lists contain `d`, `k=60`, the constant from the original RRF paper and Qdrant's own default), and adding a dependency for it would contradict "small composable modules" for no real benefit.
 - `fuse(vector_hits, chunk_keyword_hits, note_title_hits, *, k=60) -> list[FusedResult]`:
@@ -60,18 +60,18 @@ This design covers everything from "a note's chunks are indexed" (Phase 3's endp
   - Returns `FusedResult(chunk_id, note_id, score)`, sorted descending by score.
 - This is a three-way fusion (vector, chunk-keyword, note-title), directly implementing `DATA_MODEL.md` §5's already-accepted description of `vault_search`: "`notes_fts` + `chunks_fts` (keyword leg), fused with the Qdrant vector leg." No new architectural decision is being made here — this design specifies the previously-unspecified mechanics of an already-accepted three-way relationship.
 
-### 2.4 Reranking (`ai_brain.retrieval.reranking`)
+### 2.4 Reranking (`athena.retrieval.reranking`)
 
-- One process-lifetime `CrossEncoder("BAAI/bge-reranker-v2-m3", revision=_RERANKER_REVISION, activation_fn=torch.nn.Sigmoid())` singleton, lazily constructed on first use — same pattern as `ai_brain.indexing.embedding`'s dense/sparse model singletons.
+- One process-lifetime `CrossEncoder("BAAI/bge-reranker-v2-m3", revision=_RERANKER_REVISION, activation_fn=torch.nn.Sigmoid())` singleton, lazily constructed on first use — same pattern as `athena.indexing.embedding`'s dense/sparse model singletons.
 - `rerank(query_text, candidates: list[RerankCandidate], *, top_k=10) -> list[RerankedResult]` where `RerankCandidate` carries `chunk_id`/`chunk_text` (read from the `chunks` table for the fused top-N, not re-derived from disk — the whole point of retaining chunk text independent of vectors, per ADR-0008's own stated rationale). Calls `CrossEncoder.rank(query_text, [c.chunk_text for c in candidates], top_k=top_k)` and maps `corpus_id` (a list index) back to the original `chunk_id`.
 - Reranks only the fusion's top-N (default 20, configurable) — never the full candidate pool — since a cross-encoder is quadratically more expensive per pair than the bi-encoder retrieval that already narrowed the field; this is the standard two-stage retrieve-then-rerank shape, not a novel design choice.
 
-### 2.5 Context builder (`ai_brain.retrieval.context`)
+### 2.5 Context builder (`athena.retrieval.context`)
 
 - `build_context(conn, reranked: list[RerankedResult], *, max_tokens=4096) -> ContextResult` where `ContextResult` carries the assembled `text` (each chunk prefixed with a `[Source: {note_path}]` citation line, per Master Spec's provenance requirements applied to retrieval output) and the list of `note_id`s actually included (for a future caller to attach as `research_commit`/similar provenance, not this design's concern to consume).
 - Token budgeting uses each chunk's own stored `token_count` (from `chunks.token_count`, populated by Phase 3's chunker) as a cheap proxy — greedily includes chunks in reranked order until the budget is exhausted, never truncates a chunk mid-text (skips a chunk that would exceed the remaining budget and tries the next one, rather than cutting it off, since a truncated chunk's meaning can be worse than omitting it).
 
-### 2.6 Retrieval evaluation suite (`ai_brain.retrieval.evaluation`)
+### 2.6 Retrieval evaluation suite (`athena.retrieval.evaluation`)
 
 `TESTING_STRATEGY.md` specifies a hand-curated 30-60 note corpus drawn from real-vault-shaped content, 2-5 questions per note, hand-labeled relevance judgments, tracking Recall@K/Precision@K (K=3,5,10)/MRR/nDCG@10 and p50/p95 latency, re-run in CI on every change touching chunking/embedding/fusion/reranking.
 
@@ -79,12 +79,12 @@ This design covers everything from "a note's chunks are indexed" (Phase 3's endp
 
 - `Question` / `RelevanceJudgment` fixture dataclasses, stored as versioned JSON/YAML files under `tests/retrieval/fixtures/eval_corpus/` (per `TESTING_STRATEGY.md`'s "store as versioned fixtures in Git, not generated at runtime").
 - `run_evaluation(corpus, search_fn) -> EvaluationReport` computing Recall@K/Precision@K (K=3,5,10), MRR, nDCG@10 (where graded judgments exist) and latency percentiles.
-- Exposed as `ai-brain retrieval evaluate` (CLI) rather than only a pytest fixture, so it can be run standalone against a real vault/Qdrant setup, not only the synthetic starter corpus — the design doc's own test strategy (§7) distinguishes "does the harness compute correct numbers against a fixed synthetic input" (pure unit test, no Qdrant needed) from "does the pipeline actually retrieve well against a real corpus" (needs a live Qdrant server, currently blocked in this environment, same as Phase 3).
+- Exposed as `athena retrieval evaluate` (CLI) rather than only a pytest fixture, so it can be run standalone against a real vault/Qdrant setup, not only the synthetic starter corpus — the design doc's own test strategy (§7) distinguishes "does the harness compute correct numbers against a fixed synthetic input" (pure unit test, no Qdrant needed) from "does the pipeline actually retrieve well against a real corpus" (needs a live Qdrant server, currently blocked in this environment, same as Phase 3).
 
 ## 3. Interfaces
 
 ```python
-# ai_brain/retrieval/keyword_search.py
+# athena/retrieval/keyword_search.py
 def sanitize_fts5_query(raw: str) -> str: ...
 
 @dataclass(frozen=True)
@@ -110,7 +110,7 @@ async def search_notes(
     limit: int = 50,
 ) -> list[NoteTitleHit]: ...
 
-# ai_brain/retrieval/vector_search.py
+# athena/retrieval/vector_search.py
 @dataclass(frozen=True)
 class VectorHit:
     chunk_id: int | None  # None if the point predates chunk_id being in the payload (§2.2, §8)
@@ -124,7 +124,7 @@ def search(
     limit: int = 50,
 ) -> list[VectorHit]: ...
 
-# ai_brain/retrieval/fusion.py
+# athena/retrieval/fusion.py
 @dataclass(frozen=True)
 class FusedResult:
     chunk_id: int
@@ -137,7 +137,7 @@ async def fuse(
     note_title_hits: list[NoteTitleHit], *, k: int = 60,
 ) -> list[FusedResult]: ...
 
-# ai_brain/retrieval/reranking.py
+# athena/retrieval/reranking.py
 @dataclass(frozen=True)
 class RerankCandidate:
     chunk_id: int
@@ -150,7 +150,7 @@ class RerankedResult:
 
 def rerank(query_text: str, candidates: list[RerankCandidate], *, top_k: int = 10) -> list[RerankedResult]: ...
 
-# ai_brain/retrieval/context.py
+# athena/retrieval/context.py
 @dataclass(frozen=True)
 class ContextResult:
     text: str
@@ -160,7 +160,7 @@ async def build_context(
     conn: aiosqlite.Connection, reranked: list[RerankedResult], *, max_tokens: int = 4096,
 ) -> ContextResult: ...
 
-# ai_brain/retrieval/search.py -- the orchestrator
+# athena/retrieval/search.py -- the orchestrator
 async def search(
     conn: aiosqlite.Connection, qdrant_client: QdrantClient, query_text: str, *,
     tags: list[str] | None = None, folder: str | None = None, status: str | None = None,
@@ -202,43 +202,43 @@ No new packages: `sentence-transformers` (already installed, `CrossEncoder`), `q
 
 Extends `TESTING_STRATEGY.md`'s "RAG Pipeline" and "Qdrant Integration" sections' retrieval-facing parts (already specified there, before this design existed).
 
-**FTS5 query safety (`ai_brain.retrieval.keyword_search`) — pure unit, no DB needed for the sanitizer itself:**
+**FTS5 query safety (`athena.retrieval.keyword_search`) — pure unit, no DB needed for the sanitizer itself:**
 - `sanitize_fts5_query("OR NOT AND")` — assert the literal words are searchable as terms (integration-level: apply the sanitized string in a real `MATCH` query against a fixture DB and confirm it doesn't raise and doesn't behave as boolean operators).
 - A raw string containing an embedded `"` — assert no `OperationalError: unterminated string`.
 - Empty/whitespace-only input — assert `search_chunks`/`search_notes` return `[]` without ever issuing a `MATCH` query.
 - Tag/folder/status filters applied via `search_chunks` — assert they're real SQL `WHERE` predicates against `notes` (a structural/code-reading assertion, not just behavioral) and correctly exclude non-matching notes.
 
-**Vector search (`ai_brain.retrieval.vector_search`) — unit against `QdrantClient(":memory:")` (non-fusion-critical shape assertions per ADR-0006) plus integration marked `skip` (real server required, same Docker blocker as Phase 3):**
+**Vector search (`athena.retrieval.vector_search`) — unit against `QdrantClient(":memory:")` (non-fusion-critical shape assertions per ADR-0006) plus integration marked `skip` (real server required, same Docker blocker as Phase 3):**
 - Unit: `Prefetch`/`FusionQuery` request construction has a filter set on *every* prefetch, not only the outer query (a structural assertion on the built request object, catching a regression of §0's own finding before it ever reaches a live server).
 - Integration (skipped): a filtered hybrid query against a real populated collection excludes non-matching points; `VectorHit.chunk_id` correctly reflects the payload's `chunk_id` when present and `None` when absent (a fixture point upserted without one, simulating a pre-Phase-4 point).
 
-**Cross-store fusion (`ai_brain.retrieval.fusion`) — pure unit, synthetic rank lists, no DB/Qdrant needed (per `TESTING_STRATEGY.md`'s own explicit "RRF module produces the mathematically expected fused ranking against synthetic rank lists"):**
+**Cross-store fusion (`athena.retrieval.fusion`) — pure unit, synthetic rank lists, no DB/Qdrant needed (per `TESTING_STRATEGY.md`'s own explicit "RRF module produces the mathematically expected fused ranking against synthetic rank lists"):**
 - A chunk appearing at rank 1 in two of three lists outscores one appearing at rank 1 in only one list.
 - A chunk appearing in all three lists outscores one appearing in only two, regardless of individual ranks.
 - Empty input lists (e.g. Qdrant unreachable, vector list empty) still produce a valid fused ranking from the remaining lists.
 - `note_title_hits` correctly map to their note's first chunk; a note with zero chunks is dropped, not crashed on.
 
-**Reranking (`ai_brain.retrieval.reranking`) — real model, no Qdrant/DB needed:**
+**Reranking (`athena.retrieval.reranking`) — real model, no Qdrant/DB needed:**
 - An obviously-relevant passage ranks above an obviously-irrelevant one for a given query (the coarse sanity check `TESTING_STRATEGY.md` already specifies — real quality measurement is the evaluation corpus's job).
 - `RerankedResult`'s `chunk_id` correctly round-trips through `CrossEncoder.rank()`'s `corpus_id` index mapping (an off-by-one or reordering bug here would silently corrupt every result while still "looking like" it ranked something).
 - `revision` is the pinned hash, not `"main"` (the same structural pinning-regression test Phase 3 already established for the embedding model).
 
-**Context builder (`ai_brain.retrieval.context`):**
+**Context builder (`athena.retrieval.context`):**
 - Greedy token-budget inclusion stops before exceeding `max_tokens`, using each chunk's real stored `token_count`.
 - A `max_tokens` smaller than the first chunk produces an empty `ContextResult`, not a truncated chunk.
 - Citations (`[Source: {note_path}]`) are present and correctly attributed per included chunk.
 
-**Orchestrator (`ai_brain.retrieval.search`) — integration, needs real Qdrant for the full path (skipped, Docker blocker) but the degraded-fallback path is fully testable without one:**
+**Orchestrator (`athena.retrieval.search`) — integration, needs real Qdrant for the full path (skipped, Docker blocker) but the degraded-fallback path is fully testable without one:**
 - Qdrant raising during `vector_search.search` — assert the orchestrator falls back to keyword-only fusion and still returns a `ContextResult`, never propagating the exception (this is the one orchestrator-level test that *doesn't* need a real server — it needs Qdrant to fail, which an unreachable `:memory:`-adjacent misconfiguration or a mock can simulate without Docker).
 
-**Evaluation harness (`ai_brain.retrieval.evaluation`) — the harness itself is testable without a real vault:**
+**Evaluation harness (`athena.retrieval.evaluation`) — the harness itself is testable without a real vault:**
 - Recall@K/Precision@K/MRR/nDCG@10 computed correctly against a synthetic, hand-constructed set of judgments and rankings with known-correct expected metric values (a pure math unit test, no retrieval pipeline involved).
 - The starter 10-12 note corpus runs end-to-end against the orchestrator and produces a report (integration, needs real Qdrant — skipped, same blocker).
-- `ai-brain retrieval evaluate` CLI command runs the harness and prints a report, exit-coding non-zero on a configurable regression threshold (per `TESTING_STRATEGY.md`'s CI-gating recommendation) — this wiring itself is unit-testable (mock the search function) independent of a live retrieval stack.
+- `athena retrieval evaluate` CLI command runs the harness and prints a report, exit-coding non-zero on a configurable regression threshold (per `TESTING_STRATEGY.md`'s CI-gating recommendation) — this wiring itself is unit-testable (mock the search function) independent of a live retrieval stack.
 
 ## 8. Open Items Carried Forward
 
-- **Confirmed live: in a fully Qdrant-down environment, keyword-only degradation currently returns zero results, not degraded-quality results.** Verified end-to-end against the eval corpus (`ai-brain migrate` → `ingest bootstrap` → `retrieval evaluate`, Qdrant unreachable throughout): all 17 questions hit the documented fallback (§5 row "Qdrant unreachable at query time"), and the report showed `recall@k`/`precision@k`/`mrr`/`ndcg@10`/`unanswerable_top1_false_positive_rate` all `0.000` — not just reduced, literally zero hits surfaced for every question, including the 3 deliberately-unanswerable ones (no false positives either, because nothing came back at all). Root cause is the *composition* of two individually-correct, already-documented mechanisms (§5 rows 3 and 6): `index_note()` only ever writes `chunks` rows after a successful Qdrant upsert, so a fully-down Qdrant means zero notes have any chunks; and `fusion.fuse()` correctly drops any `notes_fts` title hit whose note has no chunk to anchor a `chunk_id` to (`get_first_chunk_id_for_note` returns `None`). Each mechanism alone is sound and already covered by a test — but together, in a scenario where *no* note has ever been successfully indexed, they compose into a 100% miss rate rather than the "degraded-but-functional" search row 184 describes. This is a real gap between the design's stated failure-mode expectation and its verified emergent behavior, not a coding bug in either mechanism — flagged here rather than silently patched, since fixing it (e.g. anchoring note-title hits to a synthetic non-chunk result, or a repository-level content preview instead of requiring a `chunks` row) is itself a design decision this doc didn't make and shouldn't make retroactively. Candidate follow-up for a future phase or a small addendum ADR, not an in-place code change to this accepted design.
+- **Confirmed live: in a fully Qdrant-down environment, keyword-only degradation currently returns zero results, not degraded-quality results.** Verified end-to-end against the eval corpus (`athena migrate` → `ingest bootstrap` → `retrieval evaluate`, Qdrant unreachable throughout): all 17 questions hit the documented fallback (§5 row "Qdrant unreachable at query time"), and the report showed `recall@k`/`precision@k`/`mrr`/`ndcg@10`/`unanswerable_top1_false_positive_rate` all `0.000` — not just reduced, literally zero hits surfaced for every question, including the 3 deliberately-unanswerable ones (no false positives either, because nothing came back at all). Root cause is the *composition* of two individually-correct, already-documented mechanisms (§5 rows 3 and 6): `index_note()` only ever writes `chunks` rows after a successful Qdrant upsert, so a fully-down Qdrant means zero notes have any chunks; and `fusion.fuse()` correctly drops any `notes_fts` title hit whose note has no chunk to anchor a `chunk_id` to (`get_first_chunk_id_for_note` returns `None`). Each mechanism alone is sound and already covered by a test — but together, in a scenario where *no* note has ever been successfully indexed, they compose into a 100% miss rate rather than the "degraded-but-functional" search row 184 describes. This is a real gap between the design's stated failure-mode expectation and its verified emergent behavior, not a coding bug in either mechanism — flagged here rather than silently patched, since fixing it (e.g. anchoring note-title hits to a synthetic non-chunk result, or a repository-level content preview instead of requiring a `chunks` row) is itself a design decision this doc didn't make and shouldn't make retroactively. Candidate follow-up for a future phase or a small addendum ADR, not an in-place code change to this accepted design.
 - **Live Qdrant integration testing remains blocked** in this development environment (unchanged since Phase 3, §0) — every test above marked "skip" needs this resolved before Phase 4 is verified fully end-to-end.
 - **Whether the real Qdrant server has the same local-mode filter-on-outer-query-only bug found in `:memory:` mode is unconfirmed** — re-verify once a live server is reachable; this design's "filter on every prefetch" mitigation is defensive regardless of the answer, so no code change is anticipated either way, only confirmation.
 - **`VectorHit.chunk_id=None` for pre-Phase-4 Qdrant points** — not a bug introduced here, but a real consequence of Phase 3's own documented `upsert_chunks` trade-off. Self-heals as notes are naturally re-indexed; no backfill migration is proposed in this design (would require re-deriving payloads for existing points, a separate, narrowly-scoped follow-up if the gap proves to matter in practice).

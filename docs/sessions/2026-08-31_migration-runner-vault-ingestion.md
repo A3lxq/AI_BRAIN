@@ -19,12 +19,12 @@ independent modules, then direct integration" pattern that worked for Phase
 
 ### Shared foundation (built directly, sequentially, before parallel agents)
 
-- `ai_brain/db/connection.py` — `open_connection()`, setting `DATA_MODEL.md`
+- `athena/db/connection.py` — `open_connection()`, setting `DATA_MODEL.md`
   §1's three mandatory pragmas on every connection.
-- `ai_brain/db/migrations/000{1,2,3}_*.sql` — the full `DATA_MODEL.md` DDL,
+- `athena/db/migrations/000{1,2,3}_*.sql` — the full `DATA_MODEL.md` DDL,
   the `events` table (ADR-0010), and the secret-scan schema (ADR-0011),
   transcribed verbatim from the already-accepted documents.
-- `ai_brain/db/migrate.py` — the migration runner. **A real gotcha was found
+- `athena/db/migrate.py` — the migration runner. **A real gotcha was found
   and fixed here**: `executescript()` (stdlib `sqlite3`/`aiosqlite`) does
   *not* honor an enclosing explicit transaction — verified empirically by
   running a failing two-statement script inside `BEGIN`/`rollback()` and
@@ -41,17 +41,17 @@ independent modules, then direct integration" pattern that worked for Phase
 ### Parallel agents (narrow, non-overlapping file scope, each required to
 install/test/mypy/ruff itself before reporting)
 
-1. **Repository layer** (`ai_brain/db/repository/{notes,tags,provenance,
+1. **Repository layer** (`athena/db/repository/{notes,tags,provenance,
    lifecycle,events,research_jobs}.py`) — typed async functions over the
    migrated schema. Found no discrepancy between the schema DDL and the
    design doc's interface sketch.
-2. **Provenance inference** (`ai_brain/vault/provenance_inference.py`) —
+2. **Provenance inference** (`athena/vault/provenance_inference.py`) —
    folder-name/shape → `origin`/`provider`, implementing `DATA_MODEL.md`
    §0's rules. Made and documented one interpretive call the design doc
    left ambiguous: a known AI-origin folder name wins over a `PLAIN`
    content shape (folder placement is a stronger, more reliable signal
    than shape detection, which can miss atypical exports).
-3. **Filesystem watcher** (`ai_brain/vault/watcher.py`) — real `watchdog`
+3. **Filesystem watcher** (`athena/vault/watcher.py`) — real `watchdog`
    wrapper with debounce. **A real, previously-undocumented behavioral
    discrepancy was found**: `watchdog` 6.0.0 synthesizes a spurious
    `DirModifiedEvent` for a directory whenever a child inside it changes.
@@ -61,8 +61,8 @@ install/test/mypy/ruff itself before reporting)
 
 ### Integration work (done directly, since these are highly interdependent)
 
-- `ai_brain/vault/lifecycle.py` — the note lifecycle service.
-- `ai_brain/vault/ingest.py` — the idempotent per-path `ingest_note()` job:
+- `athena/vault/lifecycle.py` — the note lifecycle service.
+- `athena/vault/ingest.py` — the idempotent per-path `ingest_note()` job:
   path resolution, secret scanning + redaction, frontmatter parsing,
   provenance inference, note upsert, tag extraction, move/delete detection,
   and — a gap caught during self-review, not left undone — persistence of
@@ -71,14 +71,14 @@ install/test/mypy/ruff itself before reporting)
   the first time. (A first draft of this function double-inserted a
   provenance row when a source URL was present; caught and fixed before
   writing tests.)
-- `ai_brain/vault/bootstrap.py` / `ai_brain/vault/reconcile.py` — one-time
+- `athena/vault/bootstrap.py` / `athena/vault/reconcile.py` — one-time
   full-vault ingestion and the reconciliation backstop. Both deliberately
   call `ingest_note()` directly rather than through Huey's queue (documented
   deviation from the design doc's literal "re-enqueue" wording, justified
   by both being either a one-shot CLI operation or not yet worth the queue
   hop at Phase 2's scale).
-- `ai_brain/worker.py` — the Huey entry point, resolving the placeholder
-  `deployment/systemd/ai-brain-huey-worker.service`'s `ExecStart=` has
+- `athena/worker.py` — the Huey entry point, resolving the placeholder
+  `deployment/systemd/athena-huey-worker.service`'s `ExecStart=` has
   referenced since Phase 1. **Two more real bugs were caught by writing
   tests, not assumed away**: `SignedSerializer(secret="")` raises Huey's own
   `ConfigurationError`, not this codebase's `SerializerMisconfigured` —
@@ -86,7 +86,7 @@ install/test/mypy/ruff itself before reporting)
   `SignedSerializer` (matching a guard `diagnostics.py` already had);
   Huey's `SqliteHuey` never had its data directory created before opening
   its db file — fixed by calling `ensure_private_dir()` in `build_huey()`.
-- CLI: `ai-brain migrate`, `ai-brain ingest bootstrap`, `ai-brain ingest
+- CLI: `athena migrate`, `athena ingest bootstrap`, `athena ingest
   reconcile`. Doctor gained a `schema_version` check.
 
 ## A documented discrepancy between two Phase 0 documents, resolved rather
@@ -107,14 +107,14 @@ schema or silently ignoring the claim.
 - `pytest`: 211/211 passing (124 new this session)
 - `mypy --strict` across all of `src/`: clean
 - `ruff check`: clean across the whole repo
-- Live end-to-end verification: `ai-brain migrate` → `ai-brain doctor`
-  (all-ok, including the new `schema_version` check) → `ai-brain ingest
+- Live end-to-end verification: `athena migrate` → `athena doctor`
+  (all-ok, including the new `schema_version` check) → `athena ingest
   bootstrap` against a 3-note fixture vault covering all three real content
   shapes from `DATA_MODEL.md` §0 (ChatGPT-style with a recovered source URL,
   Qwen-style, OWASP-style reference material) → direct SQLite inspection
   confirmed correct `origin`/`provider`/`folder`/`title` inference,
   provenance rows, lifecycle history, and the expected event sequence per
-  note → `ai-brain ingest reconcile` confirmed a true no-op on the
+  note → `athena ingest reconcile` confirmed a true no-op on the
   already-current vault.
 
 ## What remains (see `NEXT_SESSION.md` for full detail)
@@ -125,7 +125,7 @@ schema or silently ignoring the claim.
 - `notes.index_state`/`last_index_error` — deferred to Phase 3 by design.
 - Phase 3 (Indexing): chunking, embedding, Qdrant, FTS5 — the `chunks`
   table exists in the schema but nothing writes to it yet.
-- `ai_brain.mcp_server` — still a placeholder (Phase 6).
+- `athena.mcp_server` — still a placeholder (Phase 6).
 - Real install/venv path decision for the deployment configs.
 - This session's work has not been committed to git — awaiting explicit
   user go-ahead, per standing practice established in prior sessions.

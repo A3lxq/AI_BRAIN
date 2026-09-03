@@ -5,9 +5,9 @@ from pathlib import Path
 import aiosqlite
 from huey import SqliteHuey
 
-from ai_brain.db.repository import notes as notes_repo
-from ai_brain.safety.paths import VaultRoot
-from ai_brain.vault.bootstrap import bootstrap_ingest_vault, iter_markdown_files
+from athena.db.repository import notes as notes_repo
+from athena.safety.paths import VaultRoot
+from athena.vault.bootstrap import bootstrap_ingest_vault, iter_markdown_files
 
 
 def _write(vault_dir: Path, relative: str, text: str = "content\n") -> Path:

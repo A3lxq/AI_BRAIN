@@ -1,4 +1,4 @@
-"""Tests for `ai_brain.safety.paths` — the vault path safety boundary.
+"""Tests for `athena.safety.paths` — the vault path safety boundary.
 
 Real filesystem fixtures (via pytest's `tmp_path`) are used throughout,
 including real symlinks, per `docs/design/vault-safety-boundary.md` §7:
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_brain.safety.paths import (
+from athena.safety.paths import (
     InvalidPathError,
     PathEscapesVaultError,
     PathMode,

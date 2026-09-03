@@ -1,4 +1,4 @@
-"""Tests for ai_brain.hardening.serializer.assert_safe_job_serializer.
+"""Tests for athena.hardening.serializer.assert_safe_job_serializer.
 
 Huey 3.3.4 (the version resolved from this project's `huey>=2.5.0`
 dependency pin) exposes the Huey base class as `huey.api.Huey`, not
@@ -17,7 +17,7 @@ import pytest
 from huey import MemoryHuey
 from huey.serializer import Serializer, SignedSerializer
 
-from ai_brain.hardening.serializer import (
+from athena.hardening.serializer import (
     SerializerMisconfigured,
     assert_safe_job_serializer,
 )
@@ -33,7 +33,7 @@ class _StubHuey:
 
 
 class _NoiseSerializer(Serializer):
-    """A trivial Serializer subclass not on AI_BRAIN's allowlist."""
+    """A trivial Serializer subclass not on ATHENA AI-BRAIN's allowlist."""
 
 
 def test_real_huey_base_serializer_rejected() -> None:

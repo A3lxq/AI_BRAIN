@@ -5,9 +5,9 @@ from pathlib import Path
 import aiosqlite
 from huey import SqliteHuey
 
-from ai_brain.db.repository import notes as notes_repo
-from ai_brain.safety.paths import VaultRoot
-from ai_brain.vault.ingest import ingest_note
+from athena.db.repository import notes as notes_repo
+from athena.safety.paths import VaultRoot
+from athena.vault.ingest import ingest_note
 
 _AWS_EXAMPLE_KEY = "AKIAIOSFODNN7EXAMPLE"  # AWS's own published example key, not a real credential
 
@@ -193,7 +193,7 @@ async def test_ingest_redacts_high_confidence_secret_and_records_finding(
 async def test_ingest_allowlisted_finding_is_not_redacted_and_note_stays_clean(
     conn: aiosqlite.Connection, huey: SqliteHuey, vault_root: VaultRoot, vault_dir: Path
 ) -> None:
-    from ai_brain.security.secrets import scan_note_for_secrets
+    from athena.security.secrets import scan_note_for_secrets
 
     text = f"aws_access_key_id = {_AWS_EXAMPLE_KEY}\n"
     path = _write(vault_dir, "allowlisted.md", text)

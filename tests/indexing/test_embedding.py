@@ -1,4 +1,4 @@
-"""Tests for `ai_brain.indexing.embedding`.
+"""Tests for `athena.indexing.embedding`.
 
 These tests run the real `sentence-transformers` (BGE-M3) and `fastembed`
 (miniCOIL) models against real text — no mocking — since the point is to
@@ -10,7 +10,7 @@ locally; subsequent runs are fast.
 
 from __future__ import annotations
 
-from ai_brain.indexing.embedding import (
+from athena.indexing.embedding import (
     EMBEDDING_MODEL_VERSION,
     SparseVector,
     embed_dense,
@@ -39,7 +39,7 @@ class TestEmbedDense:
         # a real finding, not something to paper over with a tolerance. Two
         # independent calls are the actually meaningful determinism
         # guarantee (no hidden randomness/dropout) and are bit-for-bit equal.
-        text = "AI_BRAIN indexes an Obsidian vault for retrieval."
+        text = "ATHENA AI-BRAIN indexes an Obsidian vault for retrieval."
         [first] = embed_dense([text])
         [second] = embed_dense([text])
         assert first == second
@@ -57,7 +57,7 @@ class TestEmbedDense:
         texts = [
             "The quick brown fox jumps over the lazy dog.",
             "Qdrant stores dense and sparse vectors for hybrid search.",
-            "Obsidian vaults are the source of truth for AI_BRAIN.",
+            "Obsidian vaults are the source of truth for ATHENA AI-BRAIN.",
         ]
         vectors = embed_dense(texts)
         assert len(vectors) == 3
@@ -90,7 +90,7 @@ class TestEmbedSparse:
         texts = [
             "The quick brown fox jumps over the lazy dog.",
             "Qdrant stores dense and sparse vectors for hybrid search.",
-            "Obsidian vaults are the source of truth for AI_BRAIN.",
+            "Obsidian vaults are the source of truth for ATHENA AI-BRAIN.",
         ]
         vectors = embed_sparse(texts)
         assert len(vectors) == 3

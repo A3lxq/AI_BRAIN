@@ -6,9 +6,9 @@ import pytest
 from huey import SqliteHuey
 from qdrant_client import QdrantClient, models
 
-from ai_brain.indexing.chunking import Chunk
-from ai_brain.indexing.embedding import SparseVector
-from ai_brain.indexing.qdrant_store import (
+from athena.indexing.chunking import Chunk
+from athena.indexing.embedding import SparseVector
+from athena.indexing.qdrant_store import (
     COLLECTION_ALIAS,
     delete_points_for_note,
     ensure_collection,
@@ -20,7 +20,7 @@ def _huey(tmp_path: Path) -> SqliteHuey:
     # SqliteHuey's storage opens a fresh connection per call -- ":memory:"
     # gives each call an empty, table-less database (same finding
     # tests/vault/conftest.py already documents). A real temp file is needed.
-    return SqliteHuey(name="ai-brain-test", filename=str(tmp_path / "huey.db"))
+    return SqliteHuey(name="athena-test", filename=str(tmp_path / "huey.db"))
 
 
 def test_ensure_collection_creates_expected_vector_and_sparse_config(tmp_path: Path) -> None:

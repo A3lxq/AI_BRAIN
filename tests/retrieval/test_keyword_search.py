@@ -1,4 +1,4 @@
-"""Tests for `ai_brain.retrieval.keyword_search` against a real migrated
+"""Tests for `athena.retrieval.keyword_search` against a real migrated
 SQLite file (docs/design/retrieval-pipeline.md §2.1/§7).
 """
 
@@ -8,9 +8,9 @@ import uuid
 
 import aiosqlite
 
-from ai_brain.db.repository import chunks, notes, tags
-from ai_brain.retrieval import keyword_search
-from ai_brain.retrieval.keyword_search import (
+from athena.db.repository import chunks, notes, tags
+from athena.retrieval import keyword_search
+from athena.retrieval.keyword_search import (
     KeywordHit,
     NoteTitleHit,
     sanitize_fts5_query,

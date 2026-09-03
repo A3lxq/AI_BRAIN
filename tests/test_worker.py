@@ -1,4 +1,4 @@
-"""Smoke tests for ai_brain.worker.
+"""Smoke tests for athena.worker.
 
 worker.py constructs its module-level `huey` instance (and hard-fails via
 assert_safe_job_serializer) at import time, keyed off `load_config()`'s
@@ -6,10 +6,10 @@ environment snapshot -- so every test here sets the environment first, then
 imports the module fresh (evicting any cached import) rather than relying on
 whatever config happened to be active when some other test last imported it.
 
-worker.py itself never runs migrations (that's the explicit `ai-brain
+worker.py itself never runs migrations (that's the explicit `athena
 migrate` CLI step, not automatic) -- every test that calls a worker function
 touching `config.db_path` must apply migrations first, exactly as a real
-deployment would need to run `ai-brain migrate` before `ai-brain ingest
+deployment would need to run `athena migrate` before `athena ingest
 bootstrap`.
 """
 
@@ -24,21 +24,21 @@ from types import ModuleType
 import aiosqlite
 import pytest
 
-from ai_brain.db.migrate import DEFAULT_MIGRATIONS_DIR, apply_pending_migrations
+from athena.db.migrate import DEFAULT_MIGRATIONS_DIR, apply_pending_migrations
 
 
 def _fresh_worker_module(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, vault_dir: Path | None = None
 ) -> ModuleType:
-    monkeypatch.setenv("AI_BRAIN_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("AI_BRAIN_HUEY_SECRET", "a-real-test-secret")  # noqa: S105 -- test fixture
+    monkeypatch.setenv("ATHENA_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("ATHENA_HUEY_SECRET", "a-real-test-secret")  # noqa: S105 -- test fixture
     if vault_dir is not None:
-        monkeypatch.setenv("AI_BRAIN_VAULT_DIR", str(vault_dir))
+        monkeypatch.setenv("ATHENA_VAULT_DIR", str(vault_dir))
     else:
-        monkeypatch.delenv("AI_BRAIN_VAULT_DIR", raising=False)
+        monkeypatch.delenv("ATHENA_VAULT_DIR", raising=False)
 
-    sys.modules.pop("ai_brain.worker", None)
-    worker = import_module("ai_brain.worker")
+    sys.modules.pop("athena.worker", None)
+    worker = import_module("athena.worker")
 
     async def _migrate() -> None:
         conn = await aiosqlite.connect(worker._config.db_path)
@@ -54,19 +54,19 @@ def _fresh_worker_module(
 def test_build_huey_hard_fails_without_a_secret(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Get a valid module imported first (so `from ai_brain.worker import
+    # Get a valid module imported first (so `from athena.worker import
     # build_huey` below doesn't itself trip over the module's own top-level
     # `huey = build_huey(_config)` call with no secret configured), then
     # test build_huey directly against a deliberately misconfigured object.
     _fresh_worker_module(tmp_path, monkeypatch)
-    from ai_brain.config import AIBrainConfig
-    from ai_brain.hardening.serializer import SerializerMisconfigured
-    from ai_brain.worker import build_huey
+    from athena.config import AthenaConfig
+    from athena.hardening.serializer import SerializerMisconfigured
+    from athena.worker import build_huey
 
-    config = AIBrainConfig(
+    config = AthenaConfig(
         vault_root=None,
         data_dir=tmp_path,
-        db_path=tmp_path / "ai_brain.db",
+        db_path=tmp_path / "athena.db",
         huey_db_path=tmp_path / "huey.db",
         huey_serializer_secret=None,
         secret_scanner_block_on_high_confidence=False,
@@ -122,7 +122,7 @@ def test_run_bootstrap_without_vault_configured_raises(
 ) -> None:
     worker = _fresh_worker_module(tmp_path, monkeypatch, vault_dir=None)
 
-    with pytest.raises(RuntimeError, match="AI_BRAIN_VAULT_DIR"):
+    with pytest.raises(RuntimeError, match="ATHENA_VAULT_DIR"):
         worker.run_bootstrap()
 
 
@@ -141,8 +141,8 @@ def test_ingest_note_task_call_local_performs_real_ingestion(
 
     worker.ingest_note_task.call_local(str(note_path), "c1", None)
 
-    from ai_brain.db.connection import open_connection
-    from ai_brain.db.repository import notes as notes_repo
+    from athena.db.connection import open_connection
+    from athena.db.repository import notes as notes_repo
 
     async def _check() -> None:
         async with open_connection(worker._config.db_path) as conn:

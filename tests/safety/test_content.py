@@ -1,4 +1,4 @@
-"""Tests for `ai_brain.safety.content` — the vault content safety boundary.
+"""Tests for `athena.safety.content` — the vault content safety boundary.
 
 Fixtures mirror `docs/DATA_MODEL.md` §0's three real vault content shapes:
 frontmatter, legacy chat-export, and plain reference material.
@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from ai_brain.safety.content import (
+from athena.safety.content import (
     FrontmatterParseError,
     FrontmatterTooLargeError,
     NoteShape,
