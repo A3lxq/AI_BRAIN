@@ -15,6 +15,7 @@ dependencies = [
     "sentence-transformers>=6.0.0",
     "fastembed>=0.7.0",
     "qdrant-client>=1.16.0",
+    "datasketch>=2.0.0",
 ]
 
 [project.scripts]
@@ -61,4 +62,11 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 # huey ships no py.typed marker/stubs (verified during hardening-module implementation).
 module = "huey.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# datasketch 2.0.0 ships no py.typed marker/stubs (verified during
+# knowledge-intelligence duplicate-detection implementation), despite its
+# own source using inline type hints.
+module = "datasketch.*"
 ignore_missing_imports = true

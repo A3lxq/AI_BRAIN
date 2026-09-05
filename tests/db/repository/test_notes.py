@@ -221,3 +221,47 @@ async def test_sql_metacharacter_laden_path_is_stored_and_retrieved_literally(
     count_row = await cursor.fetchone()
     assert count_row is not None
     assert count_row[0] == 1
+
+
+async def test_list_active_excludes_soft_deleted_notes(conn: aiosqlite.Connection) -> None:
+    kept_id = await notes.insert(
+        conn, path="a.md", title="A", origin="human", provider=None,
+        folder=None, content_hash="h1", created_at="2026-09-04T00:00:00+00:00",
+    )
+    deleted_id = await notes.insert(
+        conn, path="b.md", title="B", origin="human", provider=None,
+        folder=None, content_hash="h2", created_at="2026-09-04T00:00:00+00:00",
+    )
+    await notes.soft_delete(conn, deleted_id, deleted_at="2026-09-04T01:00:00+00:00")
+
+    active = await notes.list_active(conn)
+
+    assert [row.id for row in active] == [kept_id]
+
+
+async def test_list_stale_candidates_filters_by_status_and_cutoff(
+    conn: aiosqlite.Connection,
+) -> None:
+    active_old = await notes.insert(
+        conn, path="old.md", title="Old", origin="human", provider=None,
+        folder=None, content_hash="h1", created_at="2026-01-01T00:00:00+00:00", status="active",
+    )
+    active_recent = await notes.insert(
+        conn, path="recent.md", title="Recent", origin="human", provider=None,
+        folder=None, content_hash="h2", created_at="2026-09-01T00:00:00+00:00", status="active",
+    )
+    draft_old = await notes.insert(
+        conn, path="draft.md", title="Draft", origin="human", provider=None,
+        folder=None, content_hash="h3", created_at="2026-01-01T00:00:00+00:00",
+    )
+    archived_old = await notes.insert(
+        conn, path="archived.md", title="Archived", origin="human", provider=None,
+        folder=None, content_hash="h4", created_at="2026-01-01T00:00:00+00:00", status="archived",
+    )
+
+    stale_candidates = await notes.list_stale_candidates(conn, cutoff="2026-06-01T00:00:00+00:00")
+
+    assert [row.id for row in stale_candidates] == [active_old]
+    assert active_recent not in [row.id for row in stale_candidates]
+    assert draft_old not in [row.id for row in stale_candidates]
+    assert archived_old not in [row.id for row in stale_candidates]

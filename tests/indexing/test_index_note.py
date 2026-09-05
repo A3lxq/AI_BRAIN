@@ -159,3 +159,36 @@ async def test_index_note_failure_marks_failed_and_reraises(
 
     cursor = await conn.execute("SELECT COUNT(*) FROM chunks WHERE note_id = ?", (note_id,))
     assert (await cursor.fetchone())[0] == 0
+
+
+async def test_index_note_promotes_draft_to_active_on_first_success(
+    conn: aiosqlite.Connection,
+    huey: SqliteHuey,
+    vault_root: VaultRoot,
+    vault_dir: Path,
+    qdrant_client: QdrantClient,
+) -> None:
+    """docs/design/knowledge-intelligence.md §2.4: a note's first successful
+    index (at least one real chunk) promotes it 'draft' -> 'active'."""
+    path = _write(vault_dir, "a.md", "Some real content that will produce a chunk.\n")
+    note_id = await _ingest(conn, huey, vault_root, path)
+    row = await notes_repo.get_by_id(conn, note_id)
+    assert row is not None
+    assert row.status == "draft"
+
+    await index_note(
+        conn, qdrant_client, vault_root, note_id, correlation_id="c1", causation_id=None
+    )
+
+    row = await notes_repo.get_by_id(conn, note_id)
+    assert row is not None
+    assert row.status == "active"
+
+    # A second successful index (e.g. a re-index after a content edit) must
+    # not error or otherwise misbehave against an already-'active' note.
+    await index_note(
+        conn, qdrant_client, vault_root, note_id, correlation_id="c2", causation_id=None
+    )
+    row = await notes_repo.get_by_id(conn, note_id)
+    assert row is not None
+    assert row.status == "active"

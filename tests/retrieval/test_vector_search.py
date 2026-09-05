@@ -11,7 +11,7 @@ from qdrant_client import QdrantClient, models
 from athena.indexing.chunking import Chunk
 from athena.indexing.embedding import SparseVector
 from athena.indexing.qdrant_store import COLLECTION_ALIAS, ensure_collection, upsert_chunks
-from athena.retrieval.vector_search import VectorHit, search
+from athena.retrieval.vector_search import VectorHit, find_similar_by_point_id, search
 
 
 def _huey(tmp_path: Path) -> SqliteHuey:
@@ -158,6 +158,38 @@ def test_chunk_id_is_populated_when_present_in_payload(tmp_path: Path) -> None:
     assert hits[0].chunk_id == 4821
     assert hits[0].note_id == 42
     assert hits[0].qdrant_point_id == point_id
+
+
+def test_find_similar_by_point_id_excludes_the_queried_point_itself(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    queried_point_id = _upsert_one_chunk(client, note_id=1, text="the original note")
+    _upsert_one_chunk(client, note_id=2, text="a second, different note")
+
+    hits = find_similar_by_point_id(client, queried_point_id, limit=10)
+
+    assert queried_point_id not in {hit.qdrant_point_id for hit in hits}
+    assert {hit.note_id for hit in hits} == {2}
+
+
+def test_find_similar_by_point_id_populates_score(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    queried_point_id = _upsert_one_chunk(client, note_id=1, text="the original note")
+    _upsert_one_chunk(client, note_id=2, text="a second, different note")
+
+    hits = find_similar_by_point_id(client, queried_point_id, limit=10)
+
+    assert len(hits) == 1
+    assert hits[0].score is not None
+
+
+def test_find_similar_by_point_id_respects_score_threshold(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    queried_point_id = _upsert_one_chunk(client, note_id=1, text="the original note")
+    _upsert_one_chunk(client, note_id=2, text="a second, different note")
+
+    hits = find_similar_by_point_id(client, queried_point_id, limit=10, score_threshold=2.0)
+
+    assert hits == []
 
 
 # --- Integration tests: require a real Qdrant server. -----------------------

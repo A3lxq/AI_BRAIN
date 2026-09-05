@@ -81,15 +81,27 @@
 - CLI: `athena retrieval evaluate [--corpus PATH]`.
 - Test suite: 296 tests total (55 new this session, 5 correctly `skip`-marked pending Docker/Qdrant access) — all passing; mypy --strict clean; ruff clean. Live end-to-end CLI verification against the real eval corpus (Qdrant unreachable throughout) confirmed and documented a real architectural finding: keyword-only degradation currently returns zero results, not degraded ones, when no note has ever been successfully indexed (`docs/design/retrieval-pipeline.md` §8) — a composition of two individually-correct, already-tested mechanisms, flagged for a future phase/addendum ADR rather than silently patched.
 - **Full project rename to ATHENA AI-BRAIN**, technical identity now matching the branding: the Python package (`ai_brain` → `athena`), the CLI command (`ai-brain` → `athena`), the installable package name (`pyproject.toml`), every `AI_BRAIN_*` environment variable (→ `ATHENA_*`), the `AIBrainConfig` dataclass (→ `AthenaConfig`), the Qdrant collection alias (`ai_brain_chunks*` → `athena_chunks*`), the deployment configs (`ai-brain-huey-worker.service` → `athena-huey-worker.service`, `ai-brain-mcp-launch.sh` → `athena-mcp-launch.sh`), and the GitHub repository itself (`A3lxq/AI_BRAIN` → `A3lxq/ATHENA_AI_BRAIN`, via `gh repo rename`). All 296 tests, mypy --strict, and ruff remain clean after the rename; a live CLI smoke test confirmed the renamed entry point and env vars work end-to-end. See `docs/sessions/2026-09-03_project-rename.md`.
+- `docs/design/knowledge-intelligence.md`: design for duplicate detection, the merge engine, related notes, lifecycle/stale-sweep policies, and lineage (Master Spec §9/§10/§11), including research confirming `datasketch` 2.0.0's MinHash scheme-pinning requirement and Qdrant's "query by existing point ID" mechanism.
+- `athena.intelligence.duplicates`: four-signal duplicate detection (exact content-hash, lexical MinHash-LSH, semantic cosine similarity, metadata/filename matching), fused into a combined score and upserted into `duplicate_candidates`; degrades to three signals if Qdrant is unreachable.
+- `athena.intelligence.merge`: the review/merge engine (`list_pending_duplicates`, `resolve_duplicate`, `merge_notes`) — merging is only reachable from an explicitly `'confirmed'` candidate, never automatic, per Master Spec §10.
+- `athena.intelligence.related`: on-demand related-notes suggestions, not persisted.
+- `athena.intelligence.lifecycle`: `promote_on_first_index` (`'draft'` → `'active'`) and `run_stale_sweep` (`'active'`/`'verified'` → `'stale'` after 180 days) — two narrow, explicitly-accepted policies against Master Spec §11's still-open lifecycle-transition-rules question.
+- `athena.db.repository.duplicates` (new module): `duplicate_candidates`/`note_minhash_signatures` CRUD.
+- `athena.db.repository.provenance`: extended with `insert_derivation`/`get_lineage`.
+- `athena.retrieval.vector_search`: extended with `find_similar_by_point_id` (query Qdrant by an existing point's ID directly, self-excluded).
+- CLI: `athena duplicates {scan,list,resolve,merge}`, `athena lifecycle stale-sweep`; worker gained a daily `stale_sweep_task` periodic job.
+- Test suite: 356 tests total (67 new this session, 5 correctly `skip`-marked pending Docker/Qdrant access) — all passing; mypy --strict clean; ruff clean. Live end-to-end CLI verification (scan → resolve → merge against a real scratch vault, Qdrant unreachable throughout) confirmed correct duplicate detection, graceful semantic-signal degradation, and correct merge/tombstone/provenance database state via direct inspection.
 
 ### Not yet implemented
-- Status promotion from `draft` to `active` (no mechanism decided yet)
 - `watchdog` supply-chain review (flagged as required, not yet performed)
 - `fastembed`/miniCOIL revision pinning (no mechanism exists upstream)
 - `athena.mcp_server` (MCP server entry point)
 - The zero-results-on-full-degradation gap in Phase 4's keyword-only fallback (`docs/design/retrieval-pipeline.md` §8) — a real design decision deferred to a future phase, not fixed in this pass
 - Regression-gating threshold for `athena retrieval evaluate` (currently always exits 0)
 - Retrieval-evaluation corpus scale-up to `TESTING_STRATEGY.md`'s 30-60 note target (currently 10 notes/17 questions)
+- Status promotion beyond `'draft'` → `'active'` (`'active'` → `'verified'`/`'archived'` remain fully manual, no policy proposed)
+- Duplicate-detection default thresholds are untuned against real vault data (`docs/design/knowledge-intelligence.md` §8)
+- Secret re-scanning of merged content (a deliberate scope decision, `docs/design/knowledge-intelligence.md` §6, not an oversight)
 - Event engine
 - Git automation module
 - The local `origin` git remote still points at the pre-rename URL (`git@github.com:A3lxq/AI_BRAIN.git`) — it works today via GitHub's rename redirect, but updating it (`git remote set-url origin git@github.com:A3lxq/ATHENA_AI_BRAIN.git`) requires a git-config change this environment's tooling won't make on the user's behalf; the user should run it themselves

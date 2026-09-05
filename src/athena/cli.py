@@ -139,6 +139,93 @@ def _cmd_retrieval_evaluate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_duplicates_scan(args: argparse.Namespace) -> int:
+    from athena.worker import run_duplicates_scan
+
+    candidates = run_duplicates_scan(threshold=args.threshold)
+    print(f"candidates: {len(candidates)}")
+    for candidate in candidates:
+        print(
+            f"  id={candidate.id} notes=({candidate.note_a_id}, {candidate.note_b_id}) "
+            f"method={candidate.detection_method} combined_score={candidate.combined_score:.3f} "
+            f"status={candidate.status}"
+        )
+    return 0
+
+
+def _cmd_duplicates_list(args: argparse.Namespace) -> int:
+    from athena.worker import run_duplicates_list
+
+    candidates = run_duplicates_list(status=args.status)
+    print(f"{args.status}: {len(candidates)}")
+    for candidate in candidates:
+        print(
+            f"  id={candidate.id} notes=({candidate.note_a_id}, {candidate.note_b_id}) "
+            f"method={candidate.detection_method} combined_score={candidate.combined_score:.3f}"
+        )
+    return 0
+
+
+def _cmd_duplicates_resolve(args: argparse.Namespace) -> int:
+    from athena.worker import run_duplicates_resolve
+
+    resolution = "confirmed" if args.confirm else "rejected"
+    try:
+        run_duplicates_resolve(
+            candidate_id=args.candidate_id, resolution=resolution, resolved_by="cli"
+        )
+    except ValueError as exc:
+        print(f"[FAIL] {exc}")
+        return 1
+    print(f"candidate {args.candidate_id}: {resolution}")
+    return 0
+
+
+def _cmd_duplicates_merge(args: argparse.Namespace) -> int:
+    from athena.worker import run_duplicates_list, run_duplicates_merge
+
+    # The candidate id names the pair; --keep picks which of its two notes
+    # survives. Looking the candidate up (rather than taking both note ids
+    # directly on the command line) keeps the CLI's contract tied to a
+    # specific reviewed candidate, not just any two arbitrary note ids.
+    candidate = next(
+        (c for c in run_duplicates_list(status="confirmed") if c.id == args.candidate_id), None
+    )
+    if candidate is None:
+        print(f"[FAIL] no 'confirmed' duplicate candidate with id={args.candidate_id}")
+        return 1
+    if args.keep not in (candidate.note_a_id, candidate.note_b_id):
+        print(
+            f"[FAIL] --keep {args.keep} is not one of candidate {args.candidate_id}'s notes "
+            f"({candidate.note_a_id}, {candidate.note_b_id})"
+        )
+        return 1
+    absorb_note_id = (
+        candidate.note_b_id if args.keep == candidate.note_a_id else candidate.note_a_id
+    )
+
+    try:
+        result = run_duplicates_merge(
+            keep_note_id=args.keep, absorb_note_id=absorb_note_id, merged_by="cli"
+        )
+    except ValueError as exc:
+        print(f"[FAIL] {exc}")
+        return 1
+    print(f"merged note_id={result.absorbed_note_id} into note_id={result.kept_note_id}")
+    return 0
+
+
+def _cmd_lifecycle_stale_sweep(args: argparse.Namespace) -> int:
+    from athena.worker import run_stale_sweep
+
+    summary = run_stale_sweep(stale_after_days=args.stale_after_days)
+    print(
+        f"notes_flagged={summary.notes_flagged} "
+        f"notes_skipped_duplicate_pending={summary.notes_skipped_duplicate_pending}"
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="athena", description="ATHENA AI-BRAIN CLI")
     parser.add_argument(
@@ -195,6 +282,68 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     evaluate_parser.set_defaults(func=_cmd_retrieval_evaluate)
+
+    duplicates_parser = subparsers.add_parser("duplicates", help="duplicate detection and merge")
+    duplicates_subparsers = duplicates_parser.add_subparsers(
+        dest="duplicates_command", required=True
+    )
+
+    duplicates_scan_parser = duplicates_subparsers.add_parser(
+        "scan", help="scan active notes for likely duplicates"
+    )
+    duplicates_scan_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="minimum combined score to record a candidate (default: 0.5)",
+    )
+    duplicates_scan_parser.set_defaults(func=_cmd_duplicates_scan)
+
+    duplicates_list_parser = duplicates_subparsers.add_parser(
+        "list", help="list duplicate candidates by status"
+    )
+    duplicates_list_parser.add_argument(
+        "--status",
+        default="pending",
+        choices=["pending", "confirmed", "rejected", "merged"],
+        help="candidate status to list (default: pending)",
+    )
+    duplicates_list_parser.set_defaults(func=_cmd_duplicates_list)
+
+    duplicates_resolve_parser = duplicates_subparsers.add_parser(
+        "resolve", help="confirm or reject a pending duplicate candidate"
+    )
+    duplicates_resolve_parser.add_argument("candidate_id", type=int)
+    resolve_group = duplicates_resolve_parser.add_mutually_exclusive_group(required=True)
+    resolve_group.add_argument("--confirm", action="store_true")
+    resolve_group.add_argument("--reject", action="store_true")
+    duplicates_resolve_parser.set_defaults(func=_cmd_duplicates_resolve)
+
+    duplicates_merge_parser = duplicates_subparsers.add_parser(
+        "merge", help="merge a confirmed duplicate candidate's two notes"
+    )
+    duplicates_merge_parser.add_argument("candidate_id", type=int)
+    duplicates_merge_parser.add_argument(
+        "--keep", type=int, required=True, help="note_id to keep; the other note is absorbed"
+    )
+    duplicates_merge_parser.set_defaults(func=_cmd_duplicates_merge)
+
+    lifecycle_parser = subparsers.add_parser("lifecycle", help="knowledge lifecycle commands")
+    lifecycle_subparsers = lifecycle_parser.add_subparsers(
+        dest="lifecycle_command", required=True
+    )
+
+    stale_sweep_parser = lifecycle_subparsers.add_parser(
+        "stale-sweep", help="flag long-untouched active/verified notes as stale"
+    )
+    stale_sweep_parser.add_argument(
+        "--stale-after-days",
+        type=int,
+        default=180,
+        dest="stale_after_days",
+        help="days without an update before a note is flagged stale (default: 180)",
+    )
+    stale_sweep_parser.set_defaults(func=_cmd_lifecycle_stale_sweep)
 
     return parser
 

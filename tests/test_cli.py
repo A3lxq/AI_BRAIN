@@ -40,3 +40,29 @@ def test_doctor_command_exit_code_reflects_failure(
 def test_requires_a_subcommand() -> None:
     with pytest.raises(SystemExit):
         main([])
+
+
+def test_duplicates_requires_a_subcommand() -> None:
+    # Fails at argument-parsing time, before athena.worker's lazy import --
+    # see tests/test_worker.py's module docstring for why worker-backed
+    # commands are exercised there (via a fresh, isolated import per test)
+    # rather than through `main()` here, where athena.worker's module-level
+    # `huey`/`_config` would be whatever they were on this process's first
+    # import, not necessarily this test's monkeypatched environment.
+    with pytest.raises(SystemExit):
+        main(["duplicates"])
+
+
+def test_lifecycle_requires_a_subcommand() -> None:
+    with pytest.raises(SystemExit):
+        main(["lifecycle"])
+
+
+def test_duplicates_resolve_requires_confirm_or_reject() -> None:
+    with pytest.raises(SystemExit):
+        main(["duplicates", "resolve", "1"])
+
+
+def test_duplicates_merge_requires_keep_flag() -> None:
+    with pytest.raises(SystemExit):
+        main(["duplicates", "merge", "1"])

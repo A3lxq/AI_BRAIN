@@ -229,3 +229,33 @@ async def find_by_content_hash(conn: aiosqlite.Connection, content_hash: str) ->
     )
     rows = await cursor.fetchall()
     return [_row_to_note(row) for row in rows]
+
+
+async def list_active(conn: aiosqlite.Connection) -> list[NoteRow]:
+    """Every currently-active (`deleted_at IS NULL`) note, full rows.
+
+    Feeds duplicate-detection scans (docs/design/knowledge-intelligence.md
+    §2.1), which need each note's `content_hash`/`title`/`path` to compute
+    the exact/lexical/metadata signals -- unlike `list_active_paths`, which
+    only ever needed the path.
+    """
+    cursor = await conn.execute(f"SELECT {_COLUMNS} FROM notes WHERE deleted_at IS NULL")  # noqa: S608
+    rows = await cursor.fetchall()
+    return [_row_to_note(row) for row in rows]
+
+
+async def list_stale_candidates(conn: aiosqlite.Connection, *, cutoff: str) -> list[NoteRow]:
+    """Active notes in `'active'`/`'verified'` status last updated before
+    `cutoff` (an ISO-8601 string, compared lexicographically like every
+    other timestamp column in this schema) -- feeds the stale-sweep job
+    (docs/design/knowledge-intelligence.md §2.5). Excludes notes already
+    `'stale'`/`'superseded'`/`'archived'`/`'draft'` -- promoting a note to
+    `'stale'` only makes sense starting from `'active'` or `'verified'`.
+    """
+    cursor = await conn.execute(
+        f"SELECT {_COLUMNS} FROM notes WHERE deleted_at IS NULL "  # noqa: S608
+        "AND status IN ('active', 'verified') AND updated_at < ?",
+        (cutoff,),
+    )
+    rows = await cursor.fetchall()
+    return [_row_to_note(row) for row in rows]

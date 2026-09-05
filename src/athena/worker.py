@@ -28,11 +28,18 @@ from qdrant_client import QdrantClient
 
 from athena.config import AthenaConfig, load_config
 from athena.db.connection import open_connection
+from athena.db.repository import duplicates as duplicates_repo
 from athena.db.repository import events as events_repo
 from athena.hardening.permissions import ensure_private_dir
 from athena.hardening.serializer import SerializerMisconfigured, assert_safe_job_serializer
 from athena.indexing.index_note import IndexBootstrapSummary, index_bootstrap, index_note
 from athena.indexing.qdrant_store import ensure_collection
+from athena.intelligence.duplicates import DuplicateCandidate, scan_for_duplicates
+from athena.intelligence.lifecycle import StaleSweepSummary
+from athena.intelligence.lifecycle import run_stale_sweep as _run_stale_sweep
+from athena.intelligence.merge import MergeResult, merge_notes
+from athena.intelligence.merge import list_pending_duplicates as _list_pending_duplicates
+from athena.intelligence.merge import resolve_duplicate as _resolve_duplicate
 from athena.retrieval.evaluation import (
     DEFAULT_CORPUS_DIR,
     EvaluationReport,
@@ -53,6 +60,7 @@ __all__ = [
     "ingest_note_task",
     "index_note_task",
     "reconcile_vault_task",
+    "stale_sweep_task",
 ]
 
 logger = logging.getLogger(__name__)
@@ -292,9 +300,125 @@ def run_retrieval_evaluate(
     return asyncio.run(_run())
 
 
+def run_duplicates_scan(
+    config: AthenaConfig | None = None,
+    *,
+    note_ids: list[int] | None = None,
+    threshold: float = 0.5,
+) -> list[DuplicateCandidate]:
+    """Synchronous entry point for `athena duplicates scan` (design doc §2.1).
+    Best-effort Qdrant, like `run_bootstrap`/`run_reconcile` -- the scan's own
+    semantic-signal degradation (`scan_for_duplicates`) already handles an
+    unreachable server, so this never needs to fail the whole command up
+    front over it."""
+    active_config = config or _config
+    vault_root = _require_vault_root(active_config)
+    qdrant_client = _try_get_qdrant_client(active_config) or QdrantClient(
+        url=active_config.qdrant_url
+    )
+
+    async def _run() -> list[DuplicateCandidate]:
+        async with open_connection(active_config.db_path) as conn:
+            return await scan_for_duplicates(
+                conn, qdrant_client, vault_root.path, note_ids=note_ids, threshold=threshold
+            )
+
+    return asyncio.run(_run())
+
+
+def run_duplicates_list(
+    config: AthenaConfig | None = None, *, status: str = "pending"
+) -> list[DuplicateCandidate]:
+    """Synchronous entry point for `athena duplicates list`."""
+    active_config = config or _config
+
+    async def _run() -> list[DuplicateCandidate]:
+        async with open_connection(active_config.db_path) as conn:
+            if status == "pending":
+                return await _list_pending_duplicates(conn)
+            return await duplicates_repo.list_by_status(conn, status)
+
+    return asyncio.run(_run())
+
+
+def run_duplicates_resolve(
+    config: AthenaConfig | None = None,
+    *,
+    candidate_id: int,
+    resolution: str,
+    resolved_by: str,
+    resolution_note: str | None = None,
+) -> None:
+    """Synchronous entry point for `athena duplicates resolve`."""
+    active_config = config or _config
+
+    async def _run() -> None:
+        async with open_connection(active_config.db_path) as conn:
+            await _resolve_duplicate(
+                conn,
+                candidate_id,
+                resolution=resolution,
+                resolved_by=resolved_by,
+                resolution_note=resolution_note,
+            )
+
+    asyncio.run(_run())
+
+
+def run_duplicates_merge(
+    config: AthenaConfig | None = None,
+    *,
+    keep_note_id: int,
+    absorb_note_id: int,
+    merged_by: str,
+) -> MergeResult:
+    """Synchronous entry point for `athena duplicates merge`. Requires a
+    reachable Qdrant client (unlike the scan): re-indexing the merged note
+    is best-effort internally (`merge_notes` itself degrades gracefully if
+    Qdrant is unreachable during that step), but constructing the client at
+    all needs a configured URL, same as `run_index_bootstrap`."""
+    active_config = config or _config
+    vault_root = _require_vault_root(active_config)
+    qdrant_client = QdrantClient(url=active_config.qdrant_url)
+
+    async def _run() -> MergeResult:
+        async with open_connection(active_config.db_path) as conn:
+            return await merge_notes(
+                conn,
+                qdrant_client,
+                vault_root,
+                keep_note_id=keep_note_id,
+                absorb_note_id=absorb_note_id,
+                merged_by=merged_by,
+            )
+
+    return asyncio.run(_run())
+
+
+def run_stale_sweep(
+    config: AthenaConfig | None = None, *, stale_after_days: int = 180
+) -> StaleSweepSummary:
+    """Synchronous entry point for `athena lifecycle stale-sweep` (design
+    doc §2.5), also called from the periodic `stale_sweep_task` below."""
+    active_config = config or _config
+
+    async def _run() -> StaleSweepSummary:
+        async with open_connection(active_config.db_path) as conn:
+            return await _run_stale_sweep(conn, stale_after_days=stale_after_days)
+
+    return asyncio.run(_run())
+
+
 @huey.periodic_task(crontab(minute="0"))  # type: ignore[untyped-decorator]  # huey ships no py.typed
 def reconcile_vault_task() -> None:  # pragma: no cover -- exercised via run_reconcile in tests
     run_reconcile(_config)
+
+
+@huey.periodic_task(  # type: ignore[untyped-decorator]  # huey ships no py.typed
+    crontab(minute="0", hour="3")
+)
+def stale_sweep_task() -> None:  # pragma: no cover -- exercised via run_stale_sweep in tests
+    run_stale_sweep(_config)
 
 
 def start_watcher(config: AthenaConfig | None = None) -> VaultWatcher:

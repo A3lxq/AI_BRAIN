@@ -85,6 +85,7 @@ def test_module_registers_task_and_startup_hooks(
     registered = worker.huey._registry._registry  # type: ignore[attr-defined]
     assert any(key.endswith("ingest_note_task") for key in registered)
     assert any(key.endswith("reconcile_vault_task") for key in registered)
+    assert any(key.endswith("stale_sweep_task") for key in registered)
     assert "_worker_startup" in worker.huey._startup
 
 
@@ -150,3 +151,89 @@ def test_ingest_note_task_call_local_performs_real_ingestion(
             assert row is not None
 
     asyncio.run(_check())
+
+
+def test_run_duplicates_scan_and_list_and_resolve(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    (vault_dir / "a.md").write_text("identical body text\n", encoding="utf-8")
+    (vault_dir / "b.md").write_text("identical body text\n", encoding="utf-8")
+
+    worker = _fresh_worker_module(tmp_path, monkeypatch, vault_dir=vault_dir)
+    worker.run_bootstrap()
+
+    candidates = worker.run_duplicates_scan()
+    assert len(candidates) == 1
+
+    pending = worker.run_duplicates_list(status="pending")
+    assert len(pending) == 1
+
+    worker.run_duplicates_resolve(
+        candidate_id=pending[0].id, resolution="confirmed", resolved_by="user"
+    )
+
+    confirmed = worker.run_duplicates_list(status="confirmed")
+    assert len(confirmed) == 1
+    assert confirmed[0].id == pending[0].id
+
+
+def test_run_duplicates_merge_combines_the_two_notes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shared_text = " ".join(f"word{i}" for i in range(200))
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    (vault_dir / "keep.md").write_text(shared_text + "\n", encoding="utf-8")
+    (vault_dir / "absorb.md").write_text(
+        shared_text.replace("word5", "wordFIVE") + "\n", encoding="utf-8"
+    )
+
+    worker = _fresh_worker_module(tmp_path, monkeypatch, vault_dir=vault_dir)
+    worker.run_bootstrap()
+
+    from athena.db.connection import open_connection
+    from athena.db.repository import notes as notes_repo
+
+    async def _ids() -> tuple[int, int]:
+        async with open_connection(worker._config.db_path) as conn:
+            keep_row = await notes_repo.get_by_path(conn, "keep.md")
+            absorb_row = await notes_repo.get_by_path(conn, "absorb.md")
+            assert keep_row is not None
+            assert absorb_row is not None
+            return keep_row.id, absorb_row.id
+
+    keep_id, absorb_id = asyncio.run(_ids())
+
+    candidates = worker.run_duplicates_scan(threshold=0.0)
+    match = next(c for c in candidates if {c.note_a_id, c.note_b_id} == {keep_id, absorb_id})
+    worker.run_duplicates_resolve(
+        candidate_id=match.id, resolution="confirmed", resolved_by="user"
+    )
+
+    result = worker.run_duplicates_merge(
+        keep_note_id=keep_id, absorb_note_id=absorb_id, merged_by="user"
+    )
+
+    assert result.kept_note_id == keep_id
+    merged_text = (vault_dir / "keep.md").read_text(encoding="utf-8")
+    assert "wordFIVE" in merged_text
+
+
+def test_run_stale_sweep_against_configured_vault(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    (vault_dir / "note.md").write_text("hello\n", encoding="utf-8")
+
+    worker = _fresh_worker_module(tmp_path, monkeypatch, vault_dir=vault_dir)
+    worker.run_bootstrap()
+
+    summary = worker.run_stale_sweep(stale_after_days=180)
+
+    # A freshly-ingested note (status='draft', just created) is not
+    # 'active'/'verified' yet, so this run has nothing to flag -- the point
+    # of this test is that the wiring runs end-to-end without error.
+    assert summary.notes_flagged == 0

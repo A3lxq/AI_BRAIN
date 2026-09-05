@@ -27,6 +27,11 @@ class VectorHit:
     note_id: int
     qdrant_point_id: str
     rank: int  # 1-based
+    # None for search()'s RRF-fused results, where a single per-leg score
+    # isn't meaningful -- populated only by find_similar_by_point_id's
+    # single-vector-space query, for callers that need the raw cosine score
+    # (docs/design/knowledge-intelligence.md §2.1/§2.3).
+    score: float | None = None
 
 
 def _build_filter(
@@ -100,6 +105,50 @@ def search(
                 note_id=payload["note_id"],
                 qdrant_point_id=str(point.id),
                 rank=rank,
+            )
+        )
+    return hits
+
+
+def find_similar_by_point_id(
+    client: QdrantClient,
+    point_id: str,
+    *,
+    limit: int = 10,
+    score_threshold: float | None = None,
+) -> list[VectorHit]:
+    """Query by an existing point's ID directly, rather than retrieving its
+    vector and resubmitting it (docs/design/knowledge-intelligence.md §0) --
+    confirmed via the Qdrant API reference that `query` accepts a point ID,
+    with the server resolving the stored vector internally. This also avoids
+    a retrieve-then-resubmit race against a concurrent re-index.
+
+    The queried point is excluded from its own results via a `must_not`/
+    `HasIdCondition` filter (§0) -- not a separate parameter. Dense-only
+    (no sparse/fusion leg): unlike `search()`, this isn't matching free text
+    against two different vector spaces, it's asking "what else looks like
+    this one already-embedded point," which the dense vector alone answers.
+    """
+    result = client.query_points(
+        collection_name=COLLECTION_ALIAS,
+        query=point_id,
+        using=_DENSE_VECTOR_NAME,
+        query_filter=models.Filter(must_not=[models.HasIdCondition(has_id=[point_id])]),
+        limit=limit,
+        score_threshold=score_threshold,
+        with_payload=True,
+    )
+
+    hits = []
+    for rank, point in enumerate(result.points, start=1):
+        payload = point.payload if point.payload is not None else {}
+        hits.append(
+            VectorHit(
+                chunk_id=payload.get("chunk_id"),
+                note_id=payload["note_id"],
+                qdrant_point_id=str(point.id),
+                rank=rank,
+                score=point.score,
             )
         )
     return hits

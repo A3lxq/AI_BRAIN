@@ -30,6 +30,7 @@ from athena.db.repository import secret_findings as secret_findings_repo
 from athena.indexing.chunking import chunk_note
 from athena.indexing.embedding import EMBEDDING_MODEL_VERSION, embed_dense, embed_sparse
 from athena.indexing.qdrant_store import delete_points_for_note, upsert_chunks
+from athena.intelligence.lifecycle import promote_on_first_index
 from athena.safety.content import (
     FrontmatterParseError,
     FrontmatterTooLargeError,
@@ -161,6 +162,13 @@ async def index_note(
             )
 
         await notes_repo.mark_indexed(conn, note_id, chunk_count=len(chunks), indexed_at=now)
+
+        if chunks:
+            # Only a note with at least one real, embedded, searchable chunk
+            # counts as "successfully indexed" for promotion purposes
+            # (docs/design/knowledge-intelligence.md §2.4) -- an empty note
+            # that indexes to zero chunks has nothing to promote yet.
+            await promote_on_first_index(conn, note_id)
 
         await events_repo.append_event(
             conn,

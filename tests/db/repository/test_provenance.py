@@ -177,3 +177,104 @@ async def test_insert_source_url_with_sql_metacharacters_stored_literally(
     row = await cursor.fetchone()
     assert row is not None
     assert row[0] == malicious_url
+
+
+async def _make_note_named(conn: aiosqlite.Connection, path: str) -> int:
+    return await notes.insert(
+        conn, path=path, title=path, origin="human", provider=None,
+        folder=None, content_hash=f"hash-{path}", created_at="2026-09-04T00:00:00+00:00",
+    )
+
+
+async def test_insert_activity_stores_supersedes_note_id(conn: aiosqlite.Connection) -> None:
+    kept = await _make_note_named(conn, "keep.md")
+    absorbed = await _make_note_named(conn, "absorb.md")
+
+    provenance_id = await provenance.insert_activity(
+        conn, note_id=kept, activity_type="merge", provider=None, model=None,
+        human_edited=False, occurred_at="t0", recorded_at="t0",
+        supersedes_note_id=absorbed,
+    )
+
+    cursor = await conn.execute(
+        "SELECT supersedes_note_id FROM provenance WHERE id = ?", (provenance_id,)
+    )
+    row = await cursor.fetchone()
+    assert row == (absorbed,)
+
+
+async def test_insert_derivation_attaches_source_note(conn: aiosqlite.Connection) -> None:
+    kept = await _make_note_named(conn, "keep.md")
+    source = await _make_note_named(conn, "source.md")
+    provenance_id = await provenance.insert_activity(
+        conn, note_id=kept, activity_type="merge", provider=None, model=None,
+        human_edited=False, occurred_at="t0", recorded_at="t0",
+    )
+
+    await provenance.insert_derivation(conn, provenance_id=provenance_id, source_note_id=source)
+
+    cursor = await conn.execute(
+        "SELECT source_note_id FROM provenance_derivations WHERE provenance_id = ?",
+        (provenance_id,),
+    )
+    row = await cursor.fetchone()
+    assert row == (source,)
+
+
+async def test_get_lineage_reports_ancestor_via_supersedes(conn: aiosqlite.Connection) -> None:
+    kept = await _make_note_named(conn, "keep.md")
+    absorbed = await _make_note_named(conn, "absorb.md")
+    await provenance.insert_activity(
+        conn, note_id=kept, activity_type="merge", provider=None, model=None,
+        human_edited=False, occurred_at="t0", recorded_at="t0",
+        supersedes_note_id=absorbed,
+    )
+
+    lineage = await provenance.get_lineage(conn, kept)
+
+    assert [edge.note_id for edge in lineage.ancestors] == [absorbed]
+    assert lineage.descendants == []
+
+
+async def test_get_lineage_reports_descendant_from_the_other_side(
+    conn: aiosqlite.Connection,
+) -> None:
+    kept = await _make_note_named(conn, "keep.md")
+    absorbed = await _make_note_named(conn, "absorb.md")
+    await provenance.insert_activity(
+        conn, note_id=kept, activity_type="merge", provider=None, model=None,
+        human_edited=False, occurred_at="t0", recorded_at="t0",
+        supersedes_note_id=absorbed,
+    )
+
+    lineage = await provenance.get_lineage(conn, absorbed)
+
+    assert lineage.ancestors == []
+    assert [edge.note_id for edge in lineage.descendants] == [kept]
+
+
+async def test_get_lineage_includes_multi_source_derivations_as_ancestors(
+    conn: aiosqlite.Connection,
+) -> None:
+    kept = await _make_note_named(conn, "keep.md")
+    source_1 = await _make_note_named(conn, "source1.md")
+    source_2 = await _make_note_named(conn, "source2.md")
+    provenance_id = await provenance.insert_activity(
+        conn, note_id=kept, activity_type="merge", provider=None, model=None,
+        human_edited=False, occurred_at="t0", recorded_at="t0",
+    )
+    await provenance.insert_derivation(conn, provenance_id=provenance_id, source_note_id=source_1)
+    await provenance.insert_derivation(conn, provenance_id=provenance_id, source_note_id=source_2)
+
+    lineage = await provenance.get_lineage(conn, kept)
+
+    assert {edge.note_id for edge in lineage.ancestors} == {source_1, source_2}
+
+
+async def test_get_lineage_on_a_note_with_no_history_is_empty(conn: aiosqlite.Connection) -> None:
+    note_id = await _make_note_named(conn, "lonely.md")
+
+    lineage = await provenance.get_lineage(conn, note_id)
+
+    assert lineage.ancestors == []
+    assert lineage.descendants == []
